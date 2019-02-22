@@ -27,6 +27,7 @@ class ZappaWSGIMiddleware(object):
 
     Most hacks have now been remove except for Set-Cookie permutation.
     """
+
     def __init__(self, application):
         self.application = application
 
@@ -54,15 +55,20 @@ class ZappaWSGIMiddleware(object):
             """
 
             # All the non-cookie headers should be sent unharmed.
-            
+
             # The main app can send 'set-cookie' headers in any casing
             # Related: https://github.com/Miserlou/Zappa/issues/990
-            new_headers = [header for header in headers
-                           if ((type(header[0]) != str) or (header[0].lower() != 'set-cookie'))]
-            cookie_headers = [header for header in headers 
-                              if ((type(header[0]) == str) and (header[0].lower() == "set-cookie"))]
-            for header, new_name in zip(cookie_headers,
-                                        all_casings("Set-Cookie")):
+            new_headers = [
+                header
+                for header in headers
+                if ((type(header[0]) != str) or (header[0].lower() != "set-cookie"))
+            ]
+            cookie_headers = [
+                header
+                for header in headers
+                if ((type(header[0]) == str) and (header[0].lower() == "set-cookie"))
+            ]
+            for header, new_name in zip(cookie_headers, all_casings("Set-Cookie")):
                 new_headers.append((new_name, header[1]))
             return start_response(status, new_headers, exc_info)
 

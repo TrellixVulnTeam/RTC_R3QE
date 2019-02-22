@@ -1,13 +1,15 @@
 import os
 import sys
-from setuptools import setup
 from io import open
+
+from setuptools import setup
+
 from zappa import __version__
 
-with open('README.md') as readme_file:
+with open("README.md") as readme_file:
     long_description = readme_file.read()
 
-with open(os.path.join(os.path.dirname(__file__), 'requirements.txt')) as f:
+with open(os.path.join(os.path.dirname(__file__), "requirements.txt")) as f:
     if sys.version_info[0] == 2:
         required = f.read().splitlines()
     else:
@@ -17,45 +19,44 @@ with open(os.path.join(os.path.dirname(__file__), 'requirements.txt')) as f:
         # Related: https://github.com/Miserlou/Zappa/issues/1179
         required = []
         for package in f.read().splitlines():
-            if 'futures' not in package:
+            if "futures" not in package:
                 required.append(package)
 
-with open(os.path.join(os.path.dirname(__file__), 'test_requirements.txt')) as f:
+with open(os.path.join(os.path.dirname(__file__), "test_requirements.txt")) as f:
     test_required = f.read().splitlines()
 
 setup(
-    name='zappa',
+    name="zappa",
     version=__version__,
-    packages=['zappa'],
+    packages=["zappa"],
     install_requires=required,
     tests_require=test_required,
-    test_suite='nose.collector',
+    test_suite="nose.collector",
     include_package_data=True,
-    license='MIT License',
-    description='Server-less Python Web Services for AWS Lambda and API Gateway',
+    license="MIT License",
+    description="Server-less Python Web Services for AWS Lambda and API Gateway",
     long_description=long_description,
-    long_description_content_type='text/markdown',
-    url='https://github.com/Miserlou/Zappa',
-    author='Rich Jones',
-    author_email='rich@openwatch.net',
+    long_description_content_type="text/markdown",
+    url="https://github.com/Miserlou/Zappa",
+    author="Rich Jones",
+    author_email="rich@openwatch.net",
     entry_points={
-        'console_scripts': [
-            'zappa=zappa.cli:handle',
-            'z=zappa.cli:handle',
+        "console_scripts": [
+            "zappa=zappa.cli:handle",
+            "z=zappa.cli:handle",
+            "crackerjack=bin.crackerjack:crackerjack",
         ]
     },
     classifiers=[
-        'Environment :: Console',
-        'License :: OSI Approved :: Apache Software License',
-        'Operating System :: OS Independent',
-        'Programming Language :: Python',
-        'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Framework :: Django',
-        'Framework :: Django :: 1.11',
-        'Framework :: Django :: 2.0',
-        'Topic :: Internet :: WWW/HTTP',
-        'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
+        "Environment :: Console",
+        "License :: OSI Approved :: Apache Software License",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 3.7",
+        "Framework :: Django",
+        "Framework :: Django :: 1.11",
+        "Framework :: Django :: 2.0",
+        "Topic :: Internet :: WWW/HTTP",
+        "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
     ],
 )

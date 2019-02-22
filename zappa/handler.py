@@ -35,6 +35,9 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
+# From https://stackoverflow.com/questions/54002903/aws-lambda-python-3-7-runtime-exception-logging
+
+
 def log_errors(func: Callable[[dict, dict], None]):
     def wrapper(*args, **kwargs):
         try:
@@ -135,8 +138,8 @@ class LambdaHandler(object):
             # This is a non-WSGI application
             # https://github.com/Miserlou/Zappa/pull/748
             if (
-                    not hasattr(self.settings, "APP_MODULE")
-                    and not self.settings.DJANGO_SETTINGS
+                not hasattr(self.settings, "APP_MODULE")
+                and not self.settings.DJANGO_SETTINGS
             ):
                 self.app_module = None
                 wsgi_app_function = None
@@ -564,8 +567,8 @@ class LambdaHandler(object):
                 if response.data:
                     if settings.BINARY_SUPPORT:
                         if (
-                                not response.mimetype.startswith("text/")
-                                or response.mimetype != "application/json"
+                            not response.mimetype.startswith("text/")
+                            or response.mimetype != "application/json"
                         ):
                             zappa_returndict["body"] = base64.b64encode(
                                 response.data
@@ -605,7 +608,7 @@ class LambdaHandler(object):
                 try:
                     self.app_module
                 except NameError as ne:
-                    message = "Failed to import module: {}".format(ne.message)
+                    message = "Failed to import module: {}".format(ne)
 
             # Call exception handler for unhandled exceptions
             exception_handler = self.settings.EXCEPTION_HANDLER

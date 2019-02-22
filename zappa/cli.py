@@ -1,15 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-"""
-Zappa CLI
-
-Deploy arbitrary Python programs as serverless Zappa applications.
-
-"""
-
-from __future__ import division, unicode_literals
-
 import argparse
 import base64
 import collections
@@ -43,10 +31,18 @@ from dateutil import parser
 from past.builtins import basestring
 
 from .core import API_GATEWAY_REGIONS, Zappa
-from .utilities import (check_new_version_available, detect_django_settings,
-                        detect_flask_apps, get_runtime_from_python_version,
-                        get_venv_from_python_version, human_size, is_valid_bucket_name,
-                        parse_s3_url, string_to_timestamp, validate_name)
+from .utilities import (
+    check_new_version_available,
+    detect_django_settings,
+    detect_flask_apps,
+    get_runtime_from_python_version,
+    get_venv_from_python_version,
+    human_size,
+    is_valid_bucket_name,
+    parse_s3_url,
+    string_to_timestamp,
+    validate_name,
+)
 
 CUSTOM_SETTINGS = [
     "apigateway_policy",
@@ -139,7 +135,7 @@ class ZappaCLI(object):
             if stage in extended_stages:
                 raise RuntimeError(
                     stage + " has already been extended to these settings. "
-                            "There is a circular extends within the settings file."
+                    "There is a circular extends within the settings file."
                 )
             extended_stages.append(stage)
 
@@ -584,7 +580,7 @@ class ZappaCLI(object):
             self.load_settings(self.vargs.get("settings_file"))
         except ValueError as e:
             if hasattr(e, "message"):
-                print("Error: {}".format(e.message))
+                print("Error: {}".format(e))
             else:
                 print(str(e))
             sys.exit(-1)
@@ -716,12 +712,12 @@ class ZappaCLI(object):
             authorizer=self.authorizer,
             cors_options=self.cors,
             description=self.apigateway_description,
-            policy=self.apigateway_policy,
+            # policy=self.apigateway_policy,
         )
 
         if not output:
             template_file = (
-                    self.lambda_name + "-template-" + str(int(time.time())) + ".json"
+                self.lambda_name + "-template-" + str(int(time.time())) + ".json"
             )
         else:
             template_file = output
@@ -872,7 +868,7 @@ class ZappaCLI(object):
 
         endpoint_url = ""
         deployment_string = (
-                click.style("Deployment complete", fg="green", bold=True) + "!"
+            click.style("Deployment complete", fg="green", bold=True) + "!"
         )
         if self.use_apigateway:
 
@@ -1166,15 +1162,15 @@ class ZappaCLI(object):
             endpoint_url += "/" + self.base_path
 
         deployed_string = (
-                "Your updated Zappa deployment is "
-                + click.style("live", fg="green", bold=True)
-                + "!"
+            "Your updated Zappa deployment is "
+            + click.style("live", fg="green", bold=True)
+            + "!"
         )
         if self.use_apigateway:
             deployed_string = (
-                    deployed_string
-                    + ": "
-                    + click.style("{}".format(endpoint_url), bold=True)
+                deployed_string
+                + ": "
+                + click.style("{}".format(endpoint_url), bold=True)
             )
 
             api_url = None
@@ -1205,15 +1201,15 @@ class ZappaCLI(object):
         print("Done!")
 
     def tail(
-            self,
-            since,
-            filter_pattern,
-            limit=10000,
-            keep_open=True,
-            colorize=True,
-            http=False,
-            non_http=False,
-            force_colorize=False,
+        self,
+        since,
+        filter_pattern,
+        limit=10000,
+        keep_open=True,
+        colorize=True,
+        http=False,
+        non_http=False,
+        force_colorize=False,
     ):
         """
         Tail this function's logs.
@@ -1352,7 +1348,7 @@ class ZappaCLI(object):
 
         # Add async tasks SNS
         if self.stage_config.get(
-                "async_source", None
+            "async_source", None
         ) == "sns" and self.stage_config.get("async_resources", True):
             self.lambda_arn = self.zappa.get_lambda_function(
                 function_name=self.lambda_name
@@ -1378,9 +1374,8 @@ class ZappaCLI(object):
                     "ProvisionedThroughput"
                 ]
                 if (
-                        provisioned_throughput["ReadCapacityUnits"] != read_capacity
-                        or provisioned_throughput[
-                    "WriteCapacityUnits"] != write_capacity
+                    provisioned_throughput["ReadCapacityUnits"] != read_capacity
+                    or provisioned_throughput["WriteCapacityUnits"] != write_capacity
                 ):
                     click.echo(
                         click.style(
@@ -1426,7 +1421,7 @@ class ZappaCLI(object):
 
         # Remove async task SNS
         if self.stage_config.get(
-                "async_source", None
+            "async_source", None
         ) == "sns" and self.stage_config.get("async_resources", True):
             removed_arns = self.zappa.remove_async_sns_topic(self.lambda_name)
             click.echo("SNS Topic removed: %s" % ", ".join(removed_arns))
@@ -1771,7 +1766,7 @@ class ZappaCLI(object):
         click.echo(
             click.style("Zappa", bold=True)
             + " is a system for running server-less Python web applications"
-              " on AWS Lambda and AWS API Gateway."
+            " on AWS Lambda and AWS API Gateway."
         )
         click.echo(
             "This `init` command will help you create and configure your new Zappa deployment."
@@ -1790,8 +1785,8 @@ class ZappaCLI(object):
                 + "'."
             )
             env = (
-                    input("What do you want to call this environment (default 'dev'): ")
-                    or "dev"
+                input("What do you want to call this environment (default 'dev'): ")
+                or "dev"
             )
             try:
                 self.check_stage_name(env)
@@ -1832,15 +1827,15 @@ class ZappaCLI(object):
 
             while True:
                 profile_name = (
-                        input(
-                            "We found the following profiles: {}, and {}. "
-                            "Which would you like us to use? (default '{}'): ".format(
-                                ", ".join(profile_names[:-1]),
-                                profile_names[-1],
-                                default_profile,
-                            )
+                    input(
+                        "We found the following profiles: {}, and {}. "
+                        "Which would you like us to use? (default '{}'): ".format(
+                            ", ".join(profile_names[:-1]),
+                            profile_names[-1],
+                            default_profile,
                         )
-                        or default_profile
+                    )
+                    or default_profile
                 )
                 if profile_name in profiles:
                     profile = profiles[profile_name]
@@ -1862,11 +1857,11 @@ class ZappaCLI(object):
         )
         while True:
             bucket = (
-                    input(
-                        "What do you want to call your bucket? (default '%s'): "
-                        % default_bucket
-                    )
-                    or default_bucket
+                input(
+                    "What do you want to call your bucket? (default '%s'): "
+                    % default_bucket
+                )
+                or default_bucket
             )
 
             if is_valid_bucket_name(bucket):
@@ -1932,11 +1927,11 @@ class ZappaCLI(object):
                         )
                     )
                     django_settings = (
-                            input(
-                                "Where are your project's settings? (default '%s'): "
-                                % matches[0]
-                            )
-                            or matches[0]
+                        input(
+                            "Where are your project's settings? (default '%s'): "
+                            % matches[0]
+                        )
+                        or matches[0]
                     )
                 else:
                     click.echo(
@@ -1971,11 +1966,11 @@ class ZappaCLI(object):
                         )
                     )
                     app_function = (
-                            input(
-                                "Where is your app's function? (default '%s'): "
-                                % matches[0]
-                            )
-                            or matches[0]
+                        input(
+                            "Where is your app's function? (default '%s'): "
+                            % matches[0]
+                        )
+                        or matches[0]
                     )
                 else:
                     app_function = input("Where is your app's function?: ")
@@ -2054,12 +2049,12 @@ class ZappaCLI(object):
         click.echo(click.style(zappa_settings_json, fg="yellow", bold=False))
 
         confirm = (
-                input(
-                    "\nDoes this look "
-                    + click.style("okay", bold=True, fg="green")
-                    + "? (default 'y') [y/n]: "
-                )
-                or "yes"
+            input(
+                "\nDoes this look "
+                + click.style("okay", bold=True, fg="green")
+                + "? (default 'y') [y/n]: "
+            )
+            or "yes"
         )
         if confirm[0] not in ["y", "Y", "yes", "YES"]:
             click.echo(
@@ -2469,8 +2464,8 @@ class ZappaCLI(object):
 
         # Check for valid values of num_retained_versions
         if (
-                self.num_retained_versions is not None
-                and type(self.num_retained_versions) is not int
+            self.num_retained_versions is not None
+            and type(self.num_retained_versions) is not int
         ):
             raise ClickException(
                 "Please supply either an integer or null for num_retained_versions in the zappa_settings.json. Found %s"
@@ -2574,10 +2569,10 @@ class ZappaCLI(object):
 
         # Must have at least one
         if (
-                not os.path.isfile(zs_json)
-                and not os.path.isfile(zs_yml)
-                and not os.path.isfile(zs_yaml)
-                and not os.path.isfile(zs_toml)
+            not os.path.isfile(zs_json)
+            and not os.path.isfile(zs_yml)
+            and not os.path.isfile(zs_yaml)
+            and not os.path.isfile(zs_toml)
         ):
             raise ClickException(
                 "Please configure a zappa_settings file or call `zappa init`."
@@ -2647,7 +2642,7 @@ class ZappaCLI(object):
             os.path.abspath(inspect.getfile(inspect.currentframe()))
         )
         handler_file = (
-                os.sep.join(current_file.split(os.sep)[0:]) + os.sep + "handler.py"
+            os.sep.join(current_file.split(os.sep)[0:]) + os.sep + "handler.py"
         )
 
         # Create the zip file(s)
@@ -2748,10 +2743,10 @@ class ZappaCLI(object):
                     )
                 app_module, app_function = self.app_function.rsplit(".", 1)
                 settings_s = (
-                        settings_s
-                        + "APP_MODULE='{0!s}'\nAPP_FUNCTION='{1!s}'\n".format(
-                    app_module, app_function
-                )
+                    settings_s
+                    + "APP_MODULE='{0!s}'\nAPP_FUNCTION='{1!s}'\n".format(
+                        app_module, app_function
+                    )
                 )
 
             if self.exception_handler:
@@ -2875,7 +2870,7 @@ class ZappaCLI(object):
                 if intent and invocation_source and function:
                     bot_events_mapping[
                         str(intent) + ":" + str(invocation_source)
-                        ] = function
+                    ] = function
 
             settings_s = settings_s + "AWS_BOT_EVENT_MAPPING={0!s}\n".format(
                 bot_events_mapping
@@ -2959,7 +2954,7 @@ class ZappaCLI(object):
             self.remove_local_zip()
 
     def print_logs(
-            self, logs, colorize=True, http=False, non_http=False, force_colorize=None
+        self, logs, colorize=True, http=False, non_http=False, force_colorize=None
     ):
         """
         Parse, filter and print logs to the console.
@@ -3137,7 +3132,7 @@ class ZappaCLI(object):
 
         try:  # Prefer prebuild script in working directory
             if (
-                    pb_mod_path.count(".") >= 1
+                pb_mod_path.count(".") >= 1
             ):  # Prebuild script func is nested in a folder
                 (mod_folder_path, mod_name) = pb_mod_path.rsplit(".", 1)
                 mod_folder_path_fragments = mod_folder_path.split(".")

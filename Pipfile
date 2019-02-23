@@ -26,6 +26,7 @@ lambda_packages = "==0.20.0"
 PyYAML = "==3.13"
 Werkzeug = ">=0.14"
 zappa = {editable = true,path = "."}
+crackerblack = "*"
 
 [requires]
 python_version = "3.7"

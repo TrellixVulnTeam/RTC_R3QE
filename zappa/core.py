@@ -25,7 +25,7 @@ import requests
 import troposphere
 import troposphere.apigateway
 from botocore.exceptions import ClientError
-from lambda_packages import lambda_packages as lambda_packages_orig
+# from lambda_packages import lambda_packages as lambda_packages_orig
 from setuptools import find_packages
 from tqdm import tqdm
 
@@ -46,9 +46,12 @@ ppformat = PrettyPrinter(indent=8).pformat
 
 # We lower-case lambda package keys to match lower-cased
 # keys in get_installed_packages()
-lambda_packages = {
-    package_name.lower(): val for package_name, val in lambda_packages_orig.items()
-}
+# lambda_packages = {
+#     package_name.lower(): val for package_name, val in lambda_packages_orig.items()
+# }
+
+lambda_packages = dict()
+
 
 logging.basicConfig(format="%(levelname)s:%(message)s")
 logger = logging.getLogger(__name__)

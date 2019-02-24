@@ -21,14 +21,12 @@ import click
 import hjson as json
 import pkg_resources
 import requests
-import slugify
 import toml
 import yaml
 from click import BaseCommand, Context
 from click.exceptions import ClickException
 from click.globals import push_context
 from dateutil import parser
-from past.builtins import basestring
 
 from .core import API_GATEWAY_REGIONS, Zappa
 from .utilities import (
@@ -2431,7 +2429,7 @@ class ZappaCLI(object):
         # Related:  https://github.com/Miserlou/Zappa/pull/664
         #           https://github.com/Miserlou/Zappa/issues/678
         #           And various others from Slack.
-        self.lambda_name = slugify.slugify(self.project_name + "-" + self.api_stage)
+        self.lambda_name = self.project_name + "-" + self.api_stage
 
         # Load stage-specific settings
         self.s3_bucket_name = self.stage_config.get(

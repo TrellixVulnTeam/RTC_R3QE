@@ -22,7 +22,6 @@ toml = ">=0.9.4"
 tqdm = "==4.19.1"
 troposphere = ">=1.9.0"
 wsgi-request-logger = "==0.4.6"
-#lambda_packages = "==0.20.0"
 PyYAML = "==3.13"
 Werkzeug = ">=0.14"
 zappa = {editable = true,path = "."}

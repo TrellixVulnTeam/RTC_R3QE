@@ -1,16 +1,16 @@
 # -*- coding: utf8 -*-
-import mock
 import os
 import random
 import string
 import unittest
 
-from .utils import placebo_session
-
+import mock
 from zappa.cli import ZappaCLI
-from zappa.handler import LambdaHandler
-from zappa.utilities import (add_event_source, remove_event_source)
 from zappa.core import Zappa
+from zappa.handler import LambdaHandler
+from zappa.utils import (add_event_source, remove_event_source)
+
+from .utils import placebo_session
 
 
 def random_string(length):

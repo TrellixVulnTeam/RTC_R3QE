@@ -8,11 +8,8 @@ import pkgutil
 import random
 import re
 import string
-import sys
 import tempfile
-import time
 import zipfile
-from builtins import bytes, input
 from datetime import datetime, timedelta
 
 import argcomplete
@@ -21,15 +18,18 @@ import click
 import hjson as json
 import pkg_resources
 import requests
+import sys
+import time
 import toml
 import yaml
+from builtins import bytes, input
 from click import BaseCommand, Context
 from click.exceptions import ClickException
 from click.globals import push_context
 from dateutil import parser
 
 from .core import API_GATEWAY_REGIONS, Zappa
-from .utilities import (
+from .utils import (
     check_new_version_available,
     detect_django_settings,
     detect_flask_apps,
@@ -1711,7 +1711,7 @@ class ZappaCLI(object):
 
         non_strings = []
         for (k, v) in environment.items():
-            if not isinstance(v, basestring):
+            if not isinstance(v, str):
                 non_strings.append(k)
         if non_strings:
             raise ValueError(
@@ -2655,7 +2655,10 @@ class ZappaCLI(object):
                 exclude=self.stage_config.get("exclude", []),
                 disable_progress=self.disable_progress,
                 archive_format="tarball",
+                temp_dir=self.stage_config.get("temp_dir", None),
                 local_wheels_dir=self.stage_config.get("local_wheels_dir", None),
+                remote_wheels_url=self.stage_config.get("remote_wheels_url",
+                                                        None),
             )
 
             # Make sure the normal venv is not included in the handler's zip
@@ -2670,7 +2673,11 @@ class ZappaCLI(object):
                 exclude=exclude,
                 output=output,
                 disable_progress=self.disable_progress,
+                temp_dir=self.stage_config.get("temp_dir", None),
                 local_wheels_dir=self.stage_config.get("local_wheels_dir", None),
+
+                remote_wheels_url=self.stage_config.get("remote_wheels_url",
+                                                        None),
             )
         else:
 
@@ -2708,7 +2715,11 @@ class ZappaCLI(object):
                 exclude=exclude,
                 output=output,
                 disable_progress=self.disable_progress,
-                local_wheels_dir=self.stage_config.get("local_wheels_dir", None),
+                temp_dir=self.stage_config.get("temp_dir", None),
+                local_wheels_dir=self.stage_config.get("local_wheels_dir",
+                                                       None),
+                remote_wheels_url=self.stage_config.get("remote_wheels_url",
+                                                        None),
             )
 
             # Warn if this is too large for Lambda.
@@ -3025,7 +3036,7 @@ class ZappaCLI(object):
         return False
 
     def get_project_name(self):
-        return slugify.slugify(os.getcwd().split(os.sep)[-1])[:15]
+        return os.getcwd().split(os.sep)[-1][:15]
 
     def colorize_log_entry(self, string):
         """

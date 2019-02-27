@@ -4,15 +4,17 @@ import fnmatch
 import io
 import json
 import logging
-import os
+# import os
 import re
-import shutil
-import stat
-import sys
+from glob import glob
+from os import getcwd, listdir, path as op, sep, walk
 from pprint import PrettyPrinter
+# import shutil
+from shutil import copy2
 
 import botocore
 import durationpy
+import sys
 
 pprint = PrettyPrinter(indent=8).pprint
 
@@ -28,44 +30,107 @@ LOG = logging.getLogger(__name__)
 ##
 
 
-def copytree(src, dst, metadata=True, symlinks=False, ignore=None):
-    """
-    This is a contributed re-implementation of 'copytree' that
-    should work with the exact same behavior on multiple platforms.
+def get_files_from_dir(search_dir):
+    for directory, subdirs, files in walk(search_dir):
+        for file in files:
+            if op.isfile(file):
+                # print(op.join(search_dir, directory, file))
+                yield op.join(search_dir, directory, file)
 
-    When `metadata` is False, file metadata such as permissions and modification
-    times are not copied.
-    """
 
-    if not os.path.exists(dst):
-        os.makedirs(dst)
-        if metadata:
-            shutil.copystat(src, dst)
-    lst = os.listdir(src)
+def get_files_from_dirs(search_dir):
+    for directory, subdirs, files in walk(search_dir, followlinks=True):
+        for subdir in subdirs:
+            # print(subdir)
+            for directory, subdirs, files in walk(subdir, followlinks=True):
+                for file in files:
+                    # print(op.join(search_dir, directory, file))
+                    yield op.join(search_dir, directory, file)
 
-    if ignore:
-        excl = ignore(src, lst)
-        lst = [x for x in lst if x not in excl]
 
-    for item in lst:
-        s = os.path.join(src, item)
-        d = os.path.join(dst, item)
+def ignore_files(search_dir, patterns):
+    for directory, subdirs, files in walk(search_dir):
+        for pattern in patterns:
+            for file in files:
+                if fnmatch.fnmatch(file, pattern):
+                    print('Ignore file', op.join(search_dir, directory, file))
+                    yield op.join(search_dir, directory, file)
 
-        if symlinks and os.path.islink(s):  # pragma: no cover
-            if os.path.lexists(d):
-                os.remove(d)
-            os.symlink(os.readlink(s), d)
-            if metadata:
-                try:
-                    st = os.lstat(s)
-                    mode = stat.S_IMODE(st.st_mode)
-                    os.lchmod(d, mode)
-                except:
-                    pass  # lchmod not available
-        elif os.path.isdir(s):
-            copytree(s, d, metadata, symlinks, ignore)
-        else:
-            shutil.copy2(s, d) if metadata else shutil.copy(s, d)
+
+def ignore_dirs(search_dir, patterns):
+    for directory, subdirs, files in walk(search_dir, followlinks=True):
+        for pattern in patterns:
+            for subdir in subdirs:
+                y = op.join(subdir, pattern)
+                ex = glob(y)
+                ex = [op.join(search_dir, f) for f in ex]
+                for file in ex:
+                    if op.isdir(file):
+                        print('Ignore dir', op.join(search_dir, directory,
+                                                    file))
+                        yield file
+                    # yield op.join(search_dir, directory, file)
+
+
+def copytree(src, dst, excludes=None, symlinks=True, ignore=None):
+    exclude_dirs = list(ignore_dirs(src, excludes))
+    exclude_files = list(ignore_files(src, excludes))
+    for file in list(get_files_from_dir(src)) + list(get_files_from_dirs(src)):
+        try:
+            for d in exclude_dirs:
+                if d in file:
+                    raise ValueError
+            if file not in exclude_files:
+                if 'docs' in file:
+                    print(file)
+                    raise RuntimeError
+                print(f'Copying:  {file}')
+                copy2(file, dst, follow_symlinks=symlinks)
+        except:
+            continue
+
+
+# def copytree(src, dst, metadata=True, symlinks=False, ignore=None):
+#     """
+#     This is a contributed re-implementation of 'copytree' that
+#     should work with the exact same behavior on multiple platforms.
+#
+#     When `metadata` is False, file metadata such as permissions and
+#     modification
+#     times are not copied.
+#     """
+#
+#     if not op.exists(dst):
+#         os.makedirs(dst)
+#         if metadata:
+#             shutil.copystat(src, dst)
+#     lst = os.listdir(src)
+#
+#     if ignore:
+#         excl = ignore(src, lst)
+#         lst = [x for x in lst if x not in excl]
+#         for l in lst:
+#             print(f'{src} - {l}')
+#
+#     for item in lst:
+#         s = op.join(src, item)
+#         d = op.join(dst, item)
+#
+#         if symlinks and op.islink(s):  # pragma: no cover
+#             if op.lexists(d):
+#                 os.remove(d)
+#             os.symlink(os.readlink(s), d)
+#             if metadata:
+#                 try:
+#                     st = os.lstat(s)
+#                     mode = stat.S_IMODE(st.st_mode)
+#                     os.lchmod(d, mode)
+#                 except:
+#                     pass  # lchmod not available
+#         elif op.isdir(s):
+#             copytree(s, d, metadata, symlinks, ignore)
+#         else:
+#             shutil.copy2(s, d) if metadata else shutil.copy(s, d)
 
 
 def parse_s3_url(url):
@@ -129,15 +194,16 @@ def detect_django_settings():
     """
 
     matches = []
-    for root, dirnames, filenames in os.walk(os.getcwd()):
+    for root, dirnames, filenames in walk(getcwd()):
         for filename in fnmatch.filter(filenames, "*settings.py"):
-            full = os.path.join(root, filename)
+            full = op.join(root, filename)
             if "site-packages" in full:
                 continue
-            full = os.path.join(root, filename)
-            package_path = full.replace(os.getcwd(), "")
+            full = op.join(root, filename)
+            package_path = full.replace(getcwd(), "")
             package_module = (
-                package_path.replace(os.sep, ".").split(".", 1)[1].replace(".py", "")
+                package_path.replace(sep, ".").split(".", 1)[1].replace(".py",
+                                                                        "")
             )
 
             matches.append(package_module)
@@ -151,13 +217,13 @@ def detect_flask_apps():
     """
 
     matches = []
-    for root, dirnames, filenames in os.walk(os.getcwd()):
+    for root, dirnames, filenames in walk(getcwd()):
         for filename in fnmatch.filter(filenames, "*.py"):
-            full = os.path.join(root, filename)
+            full = op.join(root, filename)
             if "site-packages" in full:
                 continue
 
-            full = os.path.join(root, filename)
+            full = op.join(root, filename)
 
             with io.open(full, "r", encoding="utf-8") as f:
                 lines = f.readlines()
@@ -173,11 +239,11 @@ def detect_flask_apps():
                     if not app:
                         continue
 
-                    package_path = full.replace(os.getcwd(), "")
+                    package_path = full.replace(getcwd(), "")
                     package_module = (
-                        package_path.replace(os.sep, ".")
-                        .split(".", 1)[1]
-                        .replace(".py", "")
+                        package_path.replace(sep, ".")
+                            .split(".", 1)[1]
+                            .replace(".py", "")
                     )
                     app_module = package_module + "." + app
 
@@ -193,13 +259,9 @@ def get_venv_from_python_version():
 def get_runtime_from_python_version():
     """
     """
-    if sys.version_info[0] < 3:
-        return "python2.7"
-    else:
-        if sys.version_info[1] <= 6:
-            return "python3.6"
-        else:
-            return "python3.7"
+    minor_version = sys.version_info[1]
+    if minor_version in [6, 7]:
+        return f"python3.{str(minor_version)}"
 
 
 ##
@@ -218,7 +280,7 @@ def get_topic_name(lambda_name):
 
 
 def get_event_source(
-    event_source, lambda_arn, target_function, boto_session, dry=False
+        event_source, lambda_arn, target_function, boto_session, dry=False
 ):
     """
 
@@ -251,7 +313,8 @@ def get_event_source(
     class SqsEventSource(kappa.event_source.base.EventSource):
         def __init__(self, context, config):
             super(SqsEventSource, self).__init__(context, config)
-            self._lambda = kappa.awsclient.create_client("lambda", context.session)
+            self._lambda = kappa.awsclient.create_client("lambda",
+                                                         context.session)
 
         def _get_uuid(self, function):
             uuid = None
@@ -321,7 +384,8 @@ def get_event_source(
             response = None
             uuid = self._get_uuid(function)
             if uuid:
-                response = self._lambda.call("delete_event_source_mapping", UUID=uuid)
+                response = self._lambda.call("delete_event_source_mapping",
+                                             UUID=uuid)
                 LOG.debug(response)
             return response
 
@@ -332,7 +396,8 @@ def get_event_source(
             if uuid:
                 try:
                     response = self._lambda.call(
-                        "get_event_source_mapping", UUID=self._get_uuid(function)
+                        "get_event_source_mapping",
+                        UUID=self._get_uuid(function)
                     )
                     LOG.debug(response)
                 except botocore.exceptions.ClientError:
@@ -369,7 +434,8 @@ def get_event_source(
                 self.add_filters(function)
 
     event_source_map = {
-        "dynamodb": kappa.event_source.dynamodb_stream.DynamoDBStreamEventSource,
+        "dynamodb": kappa.event_source.dynamodb_stream
+            .DynamoDBStreamEventSource,
         "kinesis": kappa.event_source.kinesis.KinesisEventSource,
         "s3": kappa.event_source.s3.S3EventSource,
         "sns": ExtendedSnsEventSource,
@@ -402,7 +468,8 @@ def get_event_source(
 
     # Related:  https://github.com/Miserlou/Zappa/issues/684
     #           https://github.com/Miserlou/Zappa/issues/688
-    #           https://github.com/Miserlou/Zappa/commit/3216f7e5149e76921ecdf9451167846b95616313
+    #           https://github.com/Miserlou/Zappa/commit
+    #           /3216f7e5149e76921ecdf9451167846b95616313
     if svc == "s3":
         split_arn = lambda_arn.split(":")
         arn_front = ":".join(split_arn[:-1])
@@ -421,10 +488,11 @@ def get_event_source(
 
 
 def add_event_source(
-    event_source, lambda_arn, target_function, boto_session, dry=False
+        event_source, lambda_arn, target_function, boto_session, dry=False
 ):
     """
-    Given an event_source dictionary, create the object and add the event source.
+    Given an event_source dictionary, create the object and add the event
+    source.
     """
 
     event_source_obj, ctx, funk = get_event_source(
@@ -445,10 +513,11 @@ def add_event_source(
 
 
 def remove_event_source(
-    event_source, lambda_arn, target_function, boto_session, dry=False
+        event_source, lambda_arn, target_function, boto_session, dry=False
 ):
     """
-    Given an event_source dictionary, create the object and remove the event source.
+    Given an event_source dictionary, create the object and remove the event
+    source.
     """
 
     event_source_obj, ctx, funk = get_event_source(
@@ -465,10 +534,11 @@ def remove_event_source(
 
 
 def get_event_source_status(
-    event_source, lambda_arn, target_function, boto_session, dry=False
+        event_source, lambda_arn, target_function, boto_session, dry=False
 ):
     """
-    Given an event_source dictionary, create the object and get the event source status.
+    Given an event_source dictionary, create the object and get the event
+    source status.
     """
 
     event_source_obj, ctx, funk = get_event_source(
@@ -541,7 +611,7 @@ def contains_python_files_or_subdirs(folder):
     """
     Checks (recursively) if the directory contains .py or .pyc files
     """
-    for root, dirs, files in os.walk(folder):
+    for root, dirs, files in walk(folder):
         if [
             filename
             for filename in files
@@ -550,7 +620,7 @@ def contains_python_files_or_subdirs(folder):
             return True
 
         for d in dirs:
-            for _, subdirs, subfiles in os.walk(d):
+            for _, subdirs, subfiles in walk(d):
                 if [
                     filename
                     for filename in subfiles
@@ -563,10 +633,11 @@ def contains_python_files_or_subdirs(folder):
 
 def conflicts_with_a_neighbouring_module(directory_path):
     """
-    Checks if a directory lies in the same directory as a .py file with the same name.
+    Checks if a directory lies in the same directory as a .py file with the
+    same name.
     """
-    parent_dir_path, current_dir_name = os.path.split(os.path.normpath(directory_path))
-    neighbours = os.listdir(parent_dir_path)
+    parent_dir_path, current_dir_name = op.split(op.normpath(directory_path))
+    neighbours = listdir(parent_dir_path)
     conflicting_neighbour_filename = current_dir_name + ".py"
     return conflicting_neighbour_filename in neighbours
 
@@ -574,7 +645,8 @@ def conflicts_with_a_neighbouring_module(directory_path):
 # https://github.com/Miserlou/Zappa/issues/1188
 def titlecase_keys(d):
     """
-    Takes a dict with keys of type str and returns a new dict with all keys titlecased.
+    Takes a dict with keys of type str and returns a new dict with all keys
+    titlecased.
     """
     return {k.title(): v for k, v in d.items()}
 
@@ -582,7 +654,9 @@ def titlecase_keys(d):
 # https://github.com/Miserlou/Zappa/issues/1688
 def is_valid_bucket_name(name):
     """
-    Checks if an S3 bucket name is valid according to https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html#bucketnamingrules
+    Checks if an S3 bucket name is valid according to
+    https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
+    #bucketnamingrules
     """
     # Bucket names must be at least 3 and no more than 63 characters long.
     if len(name) < 3 or len(name) > 63:
@@ -595,7 +669,8 @@ def is_valid_bucket_name(name):
     # Bucket names must start with a lowercase letter or number.
     if not (name[0].islower() or name[0].isdigit()):
         return False
-    # Bucket names must be a series of one or more labels. Adjacent labels are separated by a single period (.).
+    # Bucket names must be a series of one or more labels. Adjacent labels
+    # are separated by a single period (.).
     for label in name.split("."):
         # Each label must start and end with a lowercase letter or a number.
         if len(label) < 1:
@@ -604,7 +679,8 @@ def is_valid_bucket_name(name):
             return False
         if not (label[-1].islower() or label[-1].isdigit()):
             return False
-    # Bucket names must not be formatted as an IP address (for example, 192.168.5.4).
+    # Bucket names must not be formatted as an IP address (for example,
+    # 192.168.5.4).
     looks_like_IP = True
     for label in name.split("."):
         if not label.isdigit():

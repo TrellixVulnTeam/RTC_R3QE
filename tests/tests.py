@@ -1,35 +1,36 @@
 # -*- coding: utf8 -*-
 import collections
 import json
-
-from io import BytesIO
-import flask
-import mock
 import os
 import random
-import string
-import zipfile
-import unittest
 import shutil
-import sys
+import string
 import tempfile
+import unittest
+import zipfile
+from io import BytesIO
 
-from click.globals import resolve_color_default
+import flask
+import mock
+import sys
 from click.exceptions import ClickException
-
-from zappa.cli import ZappaCLI, shamelessly_promote, disable_click_colors
+from click.globals import resolve_color_default
+from zappa.cli import ZappaCLI, disable_click_colors, shamelessly_promote
+from zappa.core import ASSUME_POLICY, ATTACH_POLICY, Zappa
 from zappa.ext.django_zappa import get_django_wsgi
-from zappa.letsencrypt import get_cert_and_update_domain, create_domain_key, create_domain_csr, \
-    create_chained_certificate, cleanup, parse_account_key, parse_csr, sign_certificate, encode_certificate,\
-    register_account, verify_challenge, gettempdir
-from zappa.utilities import (
-    conflicts_with_a_neighbouring_module, contains_python_files_or_subdirs,
-    detect_django_settings, detect_flask_apps, get_venv_from_python_version,
-    human_size, InvalidAwsLambdaName, parse_s3_url, string_to_timestamp,
-    titlecase_keys, is_valid_bucket_name, validate_name
-)
-from zappa.wsgi import create_wsgi_request, common_log
-from zappa.core import Zappa, ASSUME_POLICY, ATTACH_POLICY
+from zappa.letsencrypt import (create_chained_certificate, create_domain_csr,
+                               create_domain_key, encode_certificate,
+                               get_cert_and_update_domain,
+                               gettempdir, parse_account_key, parse_csr,
+                               register_account, sign_certificate)
+from zappa.utils import (InvalidAwsLambdaName,
+                         conflicts_with_a_neighbouring_module,
+                         contains_python_files_or_subdirs,
+                         detect_django_settings, detect_flask_apps,
+                         get_venv_from_python_version, human_size,
+                         is_valid_bucket_name, parse_s3_url,
+                         string_to_timestamp, titlecase_keys, validate_name)
+from zappa.wsgi import common_log, create_wsgi_request
 
 if sys.version_info[0] < 3:
     from cStringIO import StringIO as OldStringIO
@@ -192,7 +193,6 @@ class TestZappa(unittest.TestCase):
 
         with mock.patch('os.path.isdir', return_value=True):
             with mock.patch('os.listdir', return_value=['super_package']):
-                import pkg_resources  # this gets called in non-test Zappa mode
                 with mock.patch('pkg_resources.WorkingSet', return_value=mock_pip_installed_packages):
                     self.assertDictEqual(z.get_installed_packages('',''), {'super_package' : '0.1'})
 
@@ -208,7 +208,6 @@ class TestZappa(unittest.TestCase):
 
         with mock.patch('os.path.isdir', return_value=True):
             with mock.patch('os.listdir', return_value=[]):
-                import pkg_resources  # this gets called in non-test Zappa mode
                 with mock.patch('pkg_resources.WorkingSet', return_value=mock_pip_installed_packages):
                     self.assertDictEqual(z.get_installed_packages('/venv/Site-packages','/venv/site-packages64'), {
                        'superpackage': '0.1',
@@ -224,7 +223,6 @@ class TestZappa(unittest.TestCase):
 
         with mock.patch('os.path.isdir', return_value=True):
             with mock.patch('os.listdir', return_value=['superpackage']):
-                import pkg_resources  # this gets called in non-test Zappa mode
                 with mock.patch('pkg_resources.WorkingSet', return_value=mock_pip_installed_packages):
                     self.assertDictEqual(z.get_installed_packages('',''), {'superpackage' : '0.1'})
 

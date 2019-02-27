@@ -85,17 +85,18 @@ Discussion of this comes from:
 
 """
 
-import boto3
-import botocore
-from functools import update_wrapper, wraps
 import importlib
 import inspect
 import json
 import os
 import uuid
+from functools import update_wrapper, wraps
+
+import boto3
+import botocore
 import time
 
-from .utilities import get_topic_name
+from .utils import get_topic_name
 
 try:
     from zappa_settings import ASYNC_RESPONSE_TABLE

@@ -1,13 +1,13 @@
 import base64
 import logging
-from sys import stderr
 from urllib.parse import urlencode
 
 import six
 from requestlogger import ApacheFormatter
+from sys import stderr
 from werkzeug import urls
 
-from .utilities import titlecase_keys
+from .utils import titlecase_keys
 
 BINARY_METHODS = ["POST", "PUT", "PATCH", "DELETE", "CONNECT", "OPTIONS"]
 

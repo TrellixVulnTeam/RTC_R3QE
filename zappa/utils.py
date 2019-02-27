@@ -10,7 +10,7 @@ from glob import glob
 from os import getcwd, listdir, path as op, sep, walk
 from pprint import PrettyPrinter
 # import shutil
-from shutil import copy2
+from shutil import copy, copy2
 
 import botocore
 import durationpy
@@ -53,7 +53,8 @@ def ignore_files(search_dir, patterns):
         for pattern in patterns:
             for file in files:
                 if fnmatch.fnmatch(file, pattern):
-                    print('Ignore file', op.join(search_dir, directory, file))
+                    print(f'Ignoring file:  '
+                          f'{op.join(search_dir, directory, file)}')
                     yield op.join(search_dir, directory, file)
 
 
@@ -61,18 +62,17 @@ def ignore_dirs(search_dir, patterns):
     for directory, subdirs, files in walk(search_dir, followlinks=True):
         for pattern in patterns:
             for subdir in subdirs:
-                y = op.join(subdir, pattern)
-                ex = glob(y)
-                ex = [op.join(search_dir, f) for f in ex]
+                ex = [op.join(search_dir, f) for f in
+                      glob(op.join(subdir, pattern))]
                 for file in ex:
                     if op.isdir(file):
-                        print('Ignore dir', op.join(search_dir, directory,
-                                                    file))
+                        print(f'Ignoring directory:  '
+                              f'{op.join(search_dir, directory, file)}')
                         yield file
                     # yield op.join(search_dir, directory, file)
 
 
-def copytree(src, dst, excludes=None, symlinks=True, ignore=None):
+def copytree(src, dst, excludes=None, symlinks=True, metadata=True):
     exclude_dirs = list(ignore_dirs(src, excludes))
     exclude_files = list(ignore_files(src, excludes))
     for file in list(get_files_from_dir(src)) + list(get_files_from_dirs(src)):
@@ -81,12 +81,12 @@ def copytree(src, dst, excludes=None, symlinks=True, ignore=None):
                 if d in file:
                     raise ValueError
             if file not in exclude_files:
-                if 'docs' in file:
-                    print(file)
-                    raise RuntimeError
                 print(f'Copying:  {file}')
-                copy2(file, dst, follow_symlinks=symlinks)
-        except:
+                if metadata:
+                    copy2(file, dst, follow_symlinks=symlinks)
+                else:
+                    copy(file, dst, follow_symlinks=symlinks)
+        except ValueError:
             continue
 
 

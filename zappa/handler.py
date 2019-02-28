@@ -1,5 +1,3 @@
-from __future__ import unicode_literals
-
 import base64
 import collections
 import datetime
@@ -14,7 +12,6 @@ from typing import Callable
 
 import boto3
 import sys
-from builtins import str
 from werkzeug.wrappers import Response
 
 # This file may be copied into a project's root,
@@ -28,14 +25,14 @@ except ImportError as e:  # pragma: no cover
     from .wsgi import create_wsgi_request, common_log
     from .utils import parse_s3_url
 
-
 # Set up logging
 logging.basicConfig()
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
-# From https://stackoverflow.com/questions/54002903/aws-lambda-python-3-7-runtime-exception-logging
+# From https://stackoverflow.com/questions/54002903/aws-lambda-python-3-7
+# -runtime-exception-logging
 
 
 def log_errors(func: Callable[[dict, dict], None]):
@@ -70,7 +67,8 @@ class LambdaHandler(object):
         """Singleton instance to avoid repeat setup"""
         if LambdaHandler.__instance is None:
             if sys.version_info[0] < 3:
-                LambdaHandler.__instance = object.__new__(cls, settings_name, session)
+                LambdaHandler.__instance = object.__new__(cls, settings_name,
+                                                          session)
             else:
                 print("Instancing..")
                 LambdaHandler.__instance = object.__new__(cls)
@@ -117,7 +115,8 @@ class LambdaHandler(object):
                 self.load_remote_project_archive(project_archive_path)
 
             # Load compiled library to the PythonPath
-            # checks if we are the slim_handler since this is not needed otherwise
+            # checks if we are the slim_handler since this is not needed
+            # otherwise
             # https://github.com/Miserlou/Zappa/issues/776
             is_slim_handler = getattr(self.settings, "SLIM_HANDLER", False)
             if is_slim_handler:
@@ -137,44 +136,23 @@ class LambdaHandler(object):
 
             # This is a non-WSGI application
             # https://github.com/Miserlou/Zappa/pull/748
-            if (
-                not hasattr(self.settings, "APP_MODULE")
-                and not self.settings.DJANGO_SETTINGS
-            ):
+            if not hasattr(self.settings, "APP_MODULE"):
                 self.app_module = None
                 wsgi_app_function = None
-            # This is probably a normal WSGI app (Or django with overloaded wsgi application)
+            # This is probably a normal WSGI app (Or django with overloaded
+            # wsgi application)
             # https://github.com/Miserlou/Zappa/issues/1164
             elif hasattr(self.settings, "APP_MODULE"):
-                if self.settings.DJANGO_SETTINGS:
-                    sys.path.append("/var/task")
-                    from django.conf import (
-                        ENVIRONMENT_VARIABLE as SETTINGS_ENVIRONMENT_VARIABLE,
-                    )
 
-                    # add the Lambda root path into the sys.path
-                    self.trailing_slash = True
-                    os.environ[
-                        SETTINGS_ENVIRONMENT_VARIABLE
-                    ] = self.settings.DJANGO_SETTINGS
-                else:
-                    self.trailing_slash = False
+                self.trailing_slash = False
 
                 # The app module
-                self.app_module = importlib.import_module(self.settings.APP_MODULE)
+                self.app_module = importlib.import_module(
+                    self.settings.APP_MODULE)
 
                 # The application
-                wsgi_app_function = getattr(self.app_module, self.settings.APP_FUNCTION)
-            # Django gets special treatment.
-            else:
-                try:  # Support both for tests
-                    from zappa.ext.django_zappa import get_django_wsgi
-                except ImportError:  # pragma: no cover
-                    from django_zappa_app import get_django_wsgi
-
-                # Get the Django WSGI app from our extension
-                wsgi_app_function = get_django_wsgi(self.settings.DJANGO_SETTINGS)
-                self.trailing_slash = True
+                wsgi_app_function = getattr(self.app_module,
+                                            self.settings.APP_FUNCTION)
 
             self.wsgi_app = ZappaWSGIMiddleware(wsgi_app_function)
 
@@ -184,7 +162,8 @@ class LambdaHandler(object):
         """
         project_folder = "/tmp/{0!s}".format(self.settings.PROJECT_NAME)
         if not os.path.isdir(project_folder):
-            # The project folder doesn't exist in this cold lambda, get it from S3
+            # The project folder doesn't exist in this cold lambda, get it
+            # from S3
             if not self.session:
                 boto_session = boto3.Session()
             else:
@@ -277,7 +256,8 @@ class LambdaHandler(object):
                 exception=ex,
             )
             if not exception_processed:
-                # Only re-raise exception if handler directed so. Allows handler to control if lambda has to retry
+                # Only re-raise exception if handler directed so. Allows
+                # handler to control if lambda has to retry
                 # an event execution in case of failure.
                 raise
 
@@ -286,10 +266,13 @@ class LambdaHandler(object):
         exception_processed = False
         if exception_handler:
             try:
-                handler_function = cls.import_module_and_get_function(exception_handler)
-                exception_processed = handler_function(exception, event, context)
+                handler_function = cls.import_module_and_get_function(
+                    exception_handler)
+                exception_processed = handler_function(exception, event,
+                                                       context)
             except Exception as cex:
-                logger.error(msg="Failed to process exception via custom handler.")
+                logger.error(
+                    msg="Failed to process exception via custom handler.")
                 print(cex)
         return exception_processed
 
@@ -311,12 +294,14 @@ class LambdaHandler(object):
         if num_args == 0:
             result = app_function(event, context) if varargs else app_function()
         elif num_args == 1:
-            result = app_function(event, context) if varargs else app_function(event)
+            result = app_function(event, context) if varargs else app_function(
+                event)
         elif num_args == 2:
             result = app_function(event, context)
         else:
             raise RuntimeError(
-                "Function signature is invalid. Expected a function that accepts at most "
+                "Function signature is invalid. Expected a function that "
+                "accepts at most "
                 "2 arguments or varargs."
             )
         return result
@@ -380,7 +365,8 @@ class LambdaHandler(object):
     def handler(self, event, context):
         """
         An AWS Lambda function which parses specific API Gateway input into a
-        WSGI request, feeds it to our WSGI app, procceses the response, and returns
+        WSGI request, feeds it to our WSGI app, procceses the response,
+        and returns
         that back to the API Gateway.
 
         """
@@ -404,7 +390,8 @@ class LambdaHandler(object):
 
             # This is a scheduled function.
             if "." in whole_function:
-                app_function = self.import_module_and_get_function(whole_function)
+                app_function = self.import_module_and_get_function(
+                    whole_function)
 
                 # Execute the function!
                 return self.run_function(app_function, event, context)
@@ -430,26 +417,6 @@ class LambdaHandler(object):
             exec(raw_command)
             return
 
-        # This is a Django management command invocation.
-        elif event.get("manage", None):
-
-            from django.core import management
-
-            try:  # Support both for tests
-                from zappa.ext.django_zappa import get_django_wsgi
-            except ImportError as e:  # pragma: no cover
-                from django_zappa_app import get_django_wsgi
-
-            # Get the Django WSGI app from our extension
-            # We don't actually need the function,
-            # but we do need to do all of the required setup for it.
-            app_function = get_django_wsgi(self.settings.DJANGO_SETTINGS)
-
-            # Couldn't figure out how to get the value into stdout with StringIO..
-            # Read the log for now. :[]
-            management.call_command(*event["manage"].split(" "))
-            return {}
-
         # This is an AWS-event triggered invocation.
         elif event.get("Records", None):
 
@@ -457,11 +424,13 @@ class LambdaHandler(object):
             result = None
             whole_function = self.get_function_for_aws_event(records[0])
             if whole_function:
-                app_function = self.import_module_and_get_function(whole_function)
+                app_function = self.import_module_and_get_function(
+                    whole_function)
                 result = self.run_function(app_function, event, context)
                 logger.debug(result)
             else:
-                logger.error("Cannot find a function to process the triggered event.")
+                logger.error(
+                    "Cannot find a function to process the triggered event.")
             return result
 
         # this is an AWS-event triggered from Lex bot's intent
@@ -469,41 +438,45 @@ class LambdaHandler(object):
             result = None
             whole_function = self.get_function_from_bot_intent_trigger(event)
             if whole_function:
-                app_function = self.import_module_and_get_function(whole_function)
+                app_function = self.import_module_and_get_function(
+                    whole_function)
                 result = self.run_function(app_function, event, context)
                 logger.debug(result)
             else:
-                logger.error("Cannot find a function to process the triggered event.")
+                logger.error(
+                    "Cannot find a function to process the triggered event.")
             return result
 
         # This is an API Gateway authorizer event
         elif event.get("type") == "TOKEN":
             whole_function = self.settings.AUTHORIZER_FUNCTION
             if whole_function:
-                app_function = self.import_module_and_get_function(whole_function)
+                app_function = self.import_module_and_get_function(
+                    whole_function)
                 policy = self.run_function(app_function, event, context)
                 return policy
             else:
                 logger.error(
-                    "Cannot find a function to process the authorization request."
+                    "Cannot find a function to process the authorization "
+                    "request."
                 )
                 raise Exception("Unauthorized")
 
         # This is an AWS Cognito Trigger Event
         elif event.get("triggerSource", None):
             triggerSource = event.get("triggerSource")
-            whole_function = self.get_function_for_cognito_trigger(triggerSource)
+            whole_function = self.get_function_for_cognito_trigger(
+                triggerSource)
             result = event
             if whole_function:
-                app_function = self.import_module_and_get_function(whole_function)
+                app_function = self.import_module_and_get_function(
+                    whole_function)
                 result = self.run_function(app_function, event, context)
                 logger.debug(result)
             else:
-                logger.error(
-                    "Cannot find a function to handle cognito trigger {}".format(
-                        triggerSource
-                    )
-                )
+                logger.error("Cannot find a function to handle cognito trigger "
+                             "{}".format(triggerSource)
+                             )
             return result
 
         # Normal web app flow
@@ -525,7 +498,8 @@ class LambdaHandler(object):
                     if "amazonaws.com" in host:
                         # The path provided in th event doesn't include the
                         # stage, so we must tell Flask to include the API
-                        # stage in the url it calculates. See https://github.com/Miserlou/Zappa/issues/1014
+                        # stage in the url it calculates. See
+                        # https://github.com/Miserlou/Zappa/issues/1014
                         script_name = "/" + settings.API_STAGE
                 else:
                     # This is a test request sent from the AWS console
@@ -567,8 +541,8 @@ class LambdaHandler(object):
                 if response.data:
                     if settings.BINARY_SUPPORT:
                         if (
-                            not response.mimetype.startswith("text/")
-                            or response.mimetype != "application/json"
+                                not response.mimetype.startswith("text/")
+                                or response.mimetype != "application/json"
                         ):
                             zappa_returndict["body"] = base64.b64encode(
                                 response.data
@@ -577,7 +551,8 @@ class LambdaHandler(object):
                         else:
                             zappa_returndict["body"] = response.data
                     else:
-                        zappa_returndict["body"] = response.get_data(as_text=True)
+                        zappa_returndict["body"] = response.get_data(
+                            as_text=True)
 
                 zappa_returndict["statusCode"] = response.status_code
                 zappa_returndict["headers"] = {}
@@ -619,7 +594,8 @@ class LambdaHandler(object):
                 exception=e,
             )
 
-            # Return this unspecified exception as a 500, using template that API Gateway expects.
+            # Return this unspecified exception as a 500, using template that
+            # API Gateway expects.
             content = collections.OrderedDict()
             content["statusCode"] = 500
             body = {"message": message}
@@ -636,7 +612,8 @@ def lambda_handler(event, context):  # pragma: no cover
 
 
 def keep_warm_callback(event, context):
-    """Method is triggered by the CloudWatch event scheduled when keep_warm setting is set to true."""
+    """Method is triggered by the CloudWatch event scheduled when keep_warm
+    setting is set to true."""
     lambda_handler(
         event={}, context=context
     )  # overriding event with an empty one so that web app initialization will

@@ -1,26 +1,20 @@
 import json
-import json
 import logging
 import os
-from pprint import PrettyPrinter
 from string import digits
 
-import boto3
 import botocore
 import time
 import troposphere
 import troposphere.apigateway
+from boto3 import Session, resource
 from botocore.exceptions import ClientError
 from builtins import int
 
-from .utils import (
-    add_event_source,
-    get_topic_name,
-)
+from .utils import (add_event_source, get_topic_name, ppformat, pprint)
 
-pprint = PrettyPrinter(indent=8).pprint
-
-ppformat = PrettyPrinter(indent=8).pformat
+for p in [pprint, ppformat]:
+    pass
 
 # We lower-case lambda package keys to match lower-cased
 # keys in get_installed_packages()
@@ -28,6 +22,8 @@ ppformat = PrettyPrinter(indent=8).pformat
 #     package_name.lower(): val for package_name, val in
 #     lambda_packages_orig.items()
 # }
+
+boto_resource = resource("s3")
 
 lambda_packages = dict()
 
@@ -232,7 +228,7 @@ class Zappa(object):
         # Set aws_region to None to use the system's region instead
         if aws_region is None:
             # https://github.com/Miserlou/Zappa/issues/413
-            self.aws_region = boto3.Session().region_name
+            self.aws_region = Session().region_name
             logger.debug("Set region from boto: %s", self.aws_region)
         else:
             self.aws_region = aws_region
@@ -262,43 +258,63 @@ class Zappa(object):
         # Note that this is set to 300s, but if connected to
         # APIGW, Lambda will max out at 30s.
         # Related: https://github.com/Miserlou/Zappa/issues/205
-        # long_config_dict = {
-        #     "region_name": aws_region,
-        #     "connect_timeout": 5,
-        #     "read_timeout": 300,
-        # }
-        # long_config = botocore.client.Config(**long_config_dict)
-        #
-        # if load_credentials:
-        #     self.load_credentials(boto_session, profile_name)
-        #
-        #     # Initialize clients
-        #     self.s3_client = self.boto_client("s3")
-        #     self.lambda_client = self.boto_client("lambda",
-        #     config=long_config)
-        #     self.events_client = self.boto_client("events")
-        #     self.apigateway_client = self.boto_client("apigateway")
-        #     # AWS ACM certificates need to be created from us-east-1
-        #     # to be used by API gateway
-        #     east_config = botocore.client.Config(region_name="us-east-1")
-        #     self.acm_client = self.boto_client("acm", config=east_config)
-        #     self.logs_client = self.boto_client("logs")
-        #     self.iam_client = self.boto_client("iam")
-        #     self.iam = self.boto_resource("iam")
-        #     self.cloudwatch = self.boto_client("cloudwatch")
-        #     self.route53 = self.boto_client("route53")
-        #     self.sns_client = self.boto_client("sns")
-        #     self.cf_client = self.boto_client("cloudformation")
-        #     self.dynamodb_client = self.boto_client("dynamodb")
-        #     self.cognito_client = self.boto_client("cognito-idp")
-        #     self.sts_client = self.boto_client("sts")
+        long_config_dict = {
+            "region_name": aws_region,
+            "connect_timeout": 5,
+            "read_timeout": 300,
+        }
+        long_config = botocore.client.Config(**long_config_dict)
+
+        if load_credentials:
+            self.load_credentials(boto_session, profile_name)
+
+            # Initialize clients
+            self.s3_client = self.boto_client("s3")
+            self.lambda_client = self.boto_client("lambda",
+                                                  config=long_config)
+            self.events_client = self.boto_client("events")
+            self.apigateway_client = self.boto_client("apigateway")
+            # AWS ACM certificates need to be created from us-east-1
+            # to be used by API gateway
+            east_config = botocore.client.Config(region_name="us-east-1")
+            self.acm_client = self.boto_client("acm", config=east_config)
+            self.logs_client = self.boto_client("logs")
+            self.iam_client = self.boto_client("iam")
+            self.iam = self.boto_resource("iam")
+            self.cloudwatch = self.boto_client("cloudwatch")
+            self.route53 = self.boto_client("route53")
+            self.sns_client = self.boto_client("sns")
+            self.cf_client = self.boto_client("cloudformation")
+            self.dynamodb_client = self.boto_client("dynamodb")
+            self.cognito_client = self.boto_client("cognito-idp")
+            self.sts_client = self.boto_client("sts")
 
         self.tags = tags
         self.cf_template = troposphere.Template()
         self.cf_api_resources = []
         self.cf_parameters = {}
 
+    def configure_boto_session_method_kwargs(self, service, kw):
+        """Allow for custom endpoint urls for non-AWS (testing and bootleg
+        cloud)
+         deployments"""
+        if service in self.endpoint_urls and not "endpoint_url" in kw:
+            kw["endpoint_url"] = self.endpoint_urls[service]
+        return kw
 
+    # def boto_client(self, service, *args, **kwargs):
+    #     """A wrapper to apply configuration options to boto clients"""
+    #     return self.boto_session.client(
+    #         service, *args,
+    #         **self.configure_boto_session_method_kwargs(service, kwargs)
+    #     )
+
+    def boto_resource(self, service, *args, **kwargs):
+        """A wrapper to apply configuration options to boto resources"""
+        return self.boto_session.resource(
+            service, *args,
+            **self.configure_boto_session_method_kwargs(service, kwargs)
+        )
 
     def cache_param(self, value):
         """Returns a troposphere Ref to a value cached as a parameter."""
@@ -726,7 +742,7 @@ class Zappa(object):
 
             # If provided, use the supplied profile name.
             if profile_name:
-                self.boto_session = boto3.Session(
+                self.boto_session = Session(
                     profile_name=profile_name, region_name=self.aws_region
                 )
             elif os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get(
@@ -748,9 +764,9 @@ class Zappa(object):
                         "AWS_SESSION_TOKEN"
                     )
 
-                self.boto_session = boto3.Session(**session_kw)
+                self.boto_session = Session(**session_kw)
             else:
-                self.boto_session = boto3.Session(region_name=self.aws_region)
+                self.boto_session = Session(region_name=self.aws_region)
 
             logger.debug("Loaded boto session from config: %s", boto_session)
         else:

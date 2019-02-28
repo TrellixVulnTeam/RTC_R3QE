@@ -2,17 +2,12 @@ import calendar
 import datetime
 import fnmatch
 import io
-import json
-import logging
-# import os
 import re
 from glob import glob
 from os import getcwd, listdir, path as op, sep, walk
 from pprint import PrettyPrinter
-# import shutil
 from shutil import copy, copy2
 
-import botocore
 import durationpy
 import sys
 
@@ -22,7 +17,6 @@ ppformat = PrettyPrinter(indent=8).pformat
 
 from urllib.parse import urlparse
 
-LOG = logging.getLogger(__name__)
 
 
 ##
@@ -34,17 +28,14 @@ def get_files_from_dir(search_dir):
     for directory, subdirs, files in walk(search_dir):
         for file in files:
             if op.isfile(file):
-                # print(op.join(search_dir, directory, file))
                 yield op.join(search_dir, directory, file)
 
 
 def get_files_from_dirs(search_dir):
     for directory, subdirs, files in walk(search_dir, followlinks=True):
         for subdir in subdirs:
-            # print(subdir)
             for directory, subdirs, files in walk(subdir, followlinks=True):
                 for file in files:
-                    # print(op.join(search_dir, directory, file))
                     yield op.join(search_dir, directory, file)
 
 
@@ -69,7 +60,6 @@ def ignore_dirs(search_dir, patterns):
                         print(f'Ignoring directory:  '
                               f'{op.join(search_dir, directory, file)}')
                         yield file
-                    # yield op.join(search_dir, directory, file)
 
 
 def copytree(src, dst, excludes=None, symlinks=True, metadata=True):
@@ -88,49 +78,6 @@ def copytree(src, dst, excludes=None, symlinks=True, metadata=True):
                     copy(file, dst, follow_symlinks=symlinks)
         except ValueError:
             continue
-
-
-# def copytree(src, dst, metadata=True, symlinks=False, ignore=None):
-#     """
-#     This is a contributed re-implementation of 'copytree' that
-#     should work with the exact same behavior on multiple platforms.
-#
-#     When `metadata` is False, file metadata such as permissions and
-#     modification
-#     times are not copied.
-#     """
-#
-#     if not op.exists(dst):
-#         os.makedirs(dst)
-#         if metadata:
-#             shutil.copystat(src, dst)
-#     lst = os.listdir(src)
-#
-#     if ignore:
-#         excl = ignore(src, lst)
-#         lst = [x for x in lst if x not in excl]
-#         for l in lst:
-#             print(f'{src} - {l}')
-#
-#     for item in lst:
-#         s = op.join(src, item)
-#         d = op.join(dst, item)
-#
-#         if symlinks and op.islink(s):  # pragma: no cover
-#             if op.lexists(d):
-#                 os.remove(d)
-#             os.symlink(os.readlink(s), d)
-#             if metadata:
-#                 try:
-#                     st = os.lstat(s)
-#                     mode = stat.S_IMODE(st.st_mode)
-#                     os.lchmod(d, mode)
-#                 except:
-#                     pass  # lchmod not available
-#         elif op.isdir(s):
-#             copytree(s, d, metadata, symlinks, ignore)
-#         else:
-#             shutil.copy2(s, d) if metadata else shutil.copy(s, d)
 
 
 def parse_s3_url(url):
@@ -279,272 +226,6 @@ def get_topic_name(lambda_name):
 ##
 
 
-def get_event_source(
-        event_source, lambda_arn, target_function, boto_session, dry=False
-):
-    """
-
-    Given an event_source dictionary item, a session and a lambda_arn,
-    hack into Kappa's Gibson, create out an object we can call
-    to schedule this event, and return the event source.
-
-    """
-    import kappa.function
-    import kappa.restapi
-    import kappa.event_source.base
-    import kappa.event_source.dynamodb_stream
-    import kappa.event_source.kinesis
-    import kappa.event_source.s3
-    import kappa.event_source.sns
-    import kappa.event_source.cloudwatch
-    import kappa.policy
-    import kappa.role
-    import kappa.awsclient
-
-    class PseudoContext(object):
-        def __init__(self):
-            return
-
-    class PseudoFunction(object):
-        def __init__(self):
-            return
-
-    # Mostly adapted from kappa - will probably be replaced by kappa support
-    class SqsEventSource(kappa.event_source.base.EventSource):
-        def __init__(self, context, config):
-            super(SqsEventSource, self).__init__(context, config)
-            self._lambda = kappa.awsclient.create_client("lambda",
-                                                         context.session)
-
-        def _get_uuid(self, function):
-            uuid = None
-            response = self._lambda.call(
-                "list_event_source_mappings",
-                FunctionName=function.name,
-                EventSourceArn=self.arn,
-            )
-            LOG.debug(response)
-            if len(response["EventSourceMappings"]) > 0:
-                uuid = response["EventSourceMappings"][0]["UUID"]
-            return uuid
-
-        def add(self, function):
-            try:
-                response = self._lambda.call(
-                    "create_event_source_mapping",
-                    FunctionName=function.name,
-                    EventSourceArn=self.arn,
-                    BatchSize=self.batch_size,
-                    Enabled=self.enabled,
-                )
-                LOG.debug(response)
-            except Exception:
-                LOG.exception("Unable to add event source")
-
-        def enable(self, function):
-            self._config["enabled"] = True
-            try:
-                response = self._lambda.call(
-                    "update_event_source_mapping",
-                    UUID=self._get_uuid(function),
-                    Enabled=self.enabled,
-                )
-                LOG.debug(response)
-            except Exception:
-                LOG.exception("Unable to enable event source")
-
-        def disable(self, function):
-            self._config["enabled"] = False
-            try:
-                response = self._lambda.call(
-                    "update_event_source_mapping",
-                    FunctionName=function.name,
-                    Enabled=self.enabled,
-                )
-                LOG.debug(response)
-            except Exception:
-                LOG.exception("Unable to disable event source")
-
-        def update(self, function):
-            response = None
-            uuid = self._get_uuid(function)
-            if uuid:
-                try:
-                    response = self._lambda.call(
-                        "update_event_source_mapping",
-                        BatchSize=self.batch_size,
-                        Enabled=self.enabled,
-                        FunctionName=function.arn,
-                    )
-                    LOG.debug(response)
-                except Exception:
-                    LOG.exception("Unable to update event source")
-
-        def remove(self, function):
-            response = None
-            uuid = self._get_uuid(function)
-            if uuid:
-                response = self._lambda.call("delete_event_source_mapping",
-                                             UUID=uuid)
-                LOG.debug(response)
-            return response
-
-        def status(self, function):
-            response = None
-            LOG.debug("getting status for event source %s", self.arn)
-            uuid = self._get_uuid(function)
-            if uuid:
-                try:
-                    response = self._lambda.call(
-                        "get_event_source_mapping",
-                        UUID=self._get_uuid(function)
-                    )
-                    LOG.debug(response)
-                except botocore.exceptions.ClientError:
-                    LOG.debug("event source %s does not exist", self.arn)
-                    response = None
-            else:
-                LOG.debug("No UUID for event source %s", self.arn)
-            return response
-
-    class ExtendedSnsEventSource(kappa.event_source.sns.SNSEventSource):
-        @property
-        def filters(self):
-            return self._config.get("filters")
-
-        def add_filters(self, function):
-            try:
-                subscription = self.exists(function)
-                if subscription:
-                    response = self._sns.call(
-                        "set_subscription_attributes",
-                        SubscriptionArn=subscription["SubscriptionArn"],
-                        AttributeName="FilterPolicy",
-                        AttributeValue=json.dumps(self.filters),
-                    )
-                    kappa.event_source.sns.LOG.debug(response)
-            except Exception:
-                kappa.event_source.sns.LOG.exception(
-                    "Unable to add filters for SNS topic %s", self.arn
-                )
-
-        def add(self, function):
-            super(ExtendedSnsEventSource, self).add(function)
-            if self.filters:
-                self.add_filters(function)
-
-    event_source_map = {
-        "dynamodb": kappa.event_source.dynamodb_stream
-            .DynamoDBStreamEventSource,
-        "kinesis": kappa.event_source.kinesis.KinesisEventSource,
-        "s3": kappa.event_source.s3.S3EventSource,
-        "sns": ExtendedSnsEventSource,
-        "sqs": SqsEventSource,
-        "events": kappa.event_source.cloudwatch.CloudWatchEventSource,
-    }
-
-    arn = event_source["arn"]
-    _, _, svc, _ = arn.split(":", 3)
-
-    event_source_func = event_source_map.get(svc, None)
-    if not event_source_func:
-        raise ValueError("Unknown event source: {0}".format(arn))
-
-    def autoreturn(self, function_name):
-        return function_name
-
-    event_source_func._make_notification_id = autoreturn
-
-    ctx = PseudoContext()
-    ctx.session = boto_session
-
-    funk = PseudoFunction()
-    funk.name = lambda_arn
-
-    # Kappa 0.6.0 requires this nasty hacking,
-    # hopefully we can remove at least some of this soon.
-    # Kappa 0.7.0 introduces a whole host over other changes we don't
-    # really want, so we're stuck here for a little while.
-
-    # Related:  https://github.com/Miserlou/Zappa/issues/684
-    #           https://github.com/Miserlou/Zappa/issues/688
-    #           https://github.com/Miserlou/Zappa/commit
-    #           /3216f7e5149e76921ecdf9451167846b95616313
-    if svc == "s3":
-        split_arn = lambda_arn.split(":")
-        arn_front = ":".join(split_arn[:-1])
-        arn_back = split_arn[-1]
-        ctx.environment = arn_back
-        funk.arn = arn_front
-        funk.name = ":".join([arn_back, target_function])
-    else:
-        funk.arn = lambda_arn
-
-    funk._context = ctx
-
-    event_source_obj = event_source_func(ctx, event_source)
-
-    return event_source_obj, ctx, funk
-
-
-def add_event_source(
-        event_source, lambda_arn, target_function, boto_session, dry=False
-):
-    """
-    Given an event_source dictionary, create the object and add the event
-    source.
-    """
-
-    event_source_obj, ctx, funk = get_event_source(
-        event_source, lambda_arn, target_function, boto_session, dry=False
-    )
-    # TODO: Detect changes in config and refine exists algorithm
-    if not dry:
-        if not event_source_obj.status(funk):
-            event_source_obj.add(funk)
-            if event_source_obj.status(funk):
-                return "successful"
-            else:
-                return "failed"
-        else:
-            return "exists"
-
-    return "dryrun"
-
-
-def remove_event_source(
-        event_source, lambda_arn, target_function, boto_session, dry=False
-):
-    """
-    Given an event_source dictionary, create the object and remove the event
-    source.
-    """
-
-    event_source_obj, ctx, funk = get_event_source(
-        event_source, lambda_arn, target_function, boto_session, dry=False
-    )
-
-    # This is slightly dirty, but necessary for using Kappa this way.
-    funk.arn = lambda_arn
-    if not dry:
-        rule_response = event_source_obj.remove(funk)
-        return rule_response
-    else:
-        return event_source_obj
-
-
-def get_event_source_status(
-        event_source, lambda_arn, target_function, boto_session, dry=False
-):
-    """
-    Given an event_source dictionary, create the object and get the event
-    source status.
-    """
-
-    event_source_obj, ctx, funk = get_event_source(
-        event_source, lambda_arn, target_function, boto_session, dry=False
-    )
-    return event_source_obj.status(funk)
 
 
 ##

@@ -1,20 +1,3 @@
-mport
-json
-import logging
-import os
-from string import digits
-
-import time
-import troposphere
-import troposphere.apigateway
-from boto3 import Session, resource
-from botocore.exceptions import ClientError
-from botocore.client import Config
-from builtins import int
-
-from .utils import (get_topic_name, ppformat, pprint, get_event_source,
-                    add_event_source)
-
 import json
 import logging
 import os
@@ -23,6 +6,7 @@ from builtins import int
 from string import digits
 
 import troposphere
+import troposphere.apigateway
 import troposphere.apigateway
 from boto3 import Session, resource
 from botocore.client import Config

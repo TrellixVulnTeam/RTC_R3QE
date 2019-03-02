@@ -1,9 +1,9 @@
 from json import loads
 from os import remove
+from time import sleep, time
 
 from botocore.exceptions import ClientError
 from requests import get
-from time import sleep, time
 from tqdm import tqdm
 from troposphere import GetAtt, Ref, Template, apigateway
 
@@ -342,13 +342,10 @@ def create_api_gateway_routes(
     authorizer_resource = None
     if authorizer:
         authorizer_lambda_arn = authorizer.get("arn", lambda_arn)
-        lambda_uri = "arn:{invocation_prefix}:apigateway:{" \
-                     "region_name}:lambda:path/2015-03-31/functions/{" \
-                     "lambda_arn}/invocations".format(
-            invocation_prefix=invocation_prefix,
-            region_name=self.boto_session.region_name,
-            lambda_arn=authorizer_lambda_arn,
-        )
+        lambda_uri = (f"arn:{invocation_prefix}:apigateway:"
+                      f"{self.boto_session.region_name}:lambda:path/2015-03"
+                      f"-31/functions/{authorizer_lambda_arn}/invocations"
+                      )
         authorizer_resource = self.create_authorizer(
             restapi, lambda_uri, authorizer
         )

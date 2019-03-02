@@ -8,8 +8,11 @@ import pkgutil
 import random
 import re
 import string
+import sys
 import tempfile
+import time
 import zipfile
+from builtins import bytes, input
 from datetime import datetime, timedelta
 
 import argcomplete
@@ -18,16 +21,14 @@ import click
 import hjson as json
 import pkg_resources
 import requests
-import sys
-import time
 import toml
 import yaml
-from builtins import bytes, input
 from click import BaseCommand, Context
 from click.exceptions import ClickException
 from click.globals import push_context
 from dateutil import parser
 
+from .archive import Archive
 from .core import API_GATEWAY_REGIONS, Zappa
 from .utils import (
     check_new_version_available,
@@ -118,6 +119,8 @@ class ZappaCLI(object):
         self._stage_config_overrides = (
             {}
         )  # change using self.override_stage_config_setting(key, val)
+
+    archive = Archive()
 
     @property
     def stage_config(self):
@@ -2623,7 +2626,8 @@ the SSL
             # Create two zips. One with the application and the other with
             # just the handler.
             # https://github.com/Miserlou/Zappa/issues/510
-            self.zip_path = self.zappa.create_lambda_zip(
+            # self.zip_path = self.zappa.create_lambda_zip(
+            self.zip_path = self.archive.create_lambda_zip(
                 prefix=self.lambda_name,
                 use_precompiled_packages=self.stage_config.get(
                     "use_precompiled_packages", True
@@ -2639,11 +2643,12 @@ the SSL
 
             # Make sure the normal venv is not included in the handler's zip
             exclude = self.stage_config.get("exclude", [])
-            cur_venv = self.zappa.get_current_venv()
+            # cur_venv = self.zappa.get_current_venv()
+            cur_venv = Archive.get_current_venv()
             exclude.append(cur_venv.split("/")[-1])
-            self.handler_path = self.zappa.create_lambda_zip(
+            self.handler_path = self.archive.create_lambda_zip(
                 prefix="handler_{0!s}".format(self.lambda_name),
-                venv=self.zappa.create_handler_venv(),
+                venv=self.archive.create_handler_venv(),
                 handler_file=handler_file,
                 slim_handler=True,
                 exclude=exclude,
@@ -2682,7 +2687,7 @@ the SSL
                 )
 
             # Create a single zip that has the handler and application
-            self.zip_path = self.zappa.create_lambda_zip(
+            self.zip_path = self.archive.create_lambda_zip(
                 prefix=self.lambda_name,
                 handler_file=handler_file,
                 use_precompiled_packages=self.stage_config.get(
@@ -3203,10 +3208,11 @@ the SSL
     def check_venv(self):
         """ Ensure we're inside a virtualenv. """
         if self.zappa:
-            venv = self.zappa.get_current_venv()
+            # venv = self.zappa.get_current_venv()
+            venv = Archive.get_current_venv()
         else:
             # Just for `init`, when we don't have settings yet.
-            venv = Zappa.get_current_venv()
+            venv = Archive.get_current_venv()
         if not venv:
             raise ClickException(
                 click.style("Zappa", bold=True)

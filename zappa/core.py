@@ -1,17 +1,35 @@
-import json
+mport
+json
 import logging
 import os
 from string import digits
 
-import botocore
 import time
 import troposphere
 import troposphere.apigateway
 from boto3 import Session, resource
 from botocore.exceptions import ClientError
+from botocore.client import Config
 from builtins import int
 
-from .utils import (add_event_source, get_topic_name, ppformat, pprint)
+from .utils import (get_topic_name, ppformat, pprint, get_event_source,
+                    add_event_source)
+
+import json
+import logging
+import os
+import time
+from builtins import int
+from string import digits
+
+import troposphere
+import troposphere.apigateway
+from boto3 import Session, resource
+from botocore.client import Config
+from botocore.exceptions import ClientError
+
+from .utils import (add_event_source, get_event_source, get_topic_name,
+                    ppformat, pprint)
 
 for p in [pprint, ppformat]:
     pass
@@ -23,7 +41,7 @@ for p in [pprint, ppformat]:
 #     lambda_packages_orig.items()
 # }
 
-boto_resource = resource("s3")
+# boto_resource = resource("s3")
 
 lambda_packages = dict()
 
@@ -263,20 +281,21 @@ class Zappa(object):
             "connect_timeout": 5,
             "read_timeout": 300,
         }
-        long_config = botocore.client.Config(**long_config_dict)
+        long_config = Config(**long_config_dict)
 
         if load_credentials:
             self.load_credentials(boto_session, profile_name)
 
             # Initialize clients
-            self.s3_client = self.boto_client("s3")
+            # self.boto_client = self.boto_client("s3")
+            self.boto_client = resource("s3")
             self.lambda_client = self.boto_client("lambda",
                                                   config=long_config)
             self.events_client = self.boto_client("events")
             self.apigateway_client = self.boto_client("apigateway")
             # AWS ACM certificates need to be created from us-east-1
             # to be used by API gateway
-            east_config = botocore.client.Config(region_name="us-east-1")
+            east_config = Config(region_name="us-east-1")
             self.acm_client = self.boto_client("acm", config=east_config)
             self.logs_client = self.boto_client("logs")
             self.iam_client = self.boto_client("iam")
@@ -378,7 +397,7 @@ class Zappa(object):
         try:
             role, credentials_arn = self.get_credentials_arn()
 
-        except botocore.client.ClientError:
+        except ClientError:
             print("Creating " + self.role_name + " IAM Role..")
 
             role = self.iam.create_role(
@@ -401,7 +420,7 @@ class Zappa(object):
                 policy.put(PolicyDocument=self.attach_policy)
                 updated = True
 
-        except botocore.client.ClientError:
+        except ClientError:
             print(
                 "Creating zappa-permissions policy on " + self.role_name + " IAM Role."
             )
@@ -439,10 +458,8 @@ class Zappa(object):
                     if delete_response["ResponseMetadata"][
                         "HTTPStatusCode"] != 204:
                         logger.error(
-                            "Failed to delete an obsolete policy statement: {"
-                            "}".format(
-                                policy_response
-                            )
+                            "Failed to delete an obsolete policy statement: "
+                            "{}".format(policy_response)
                         )
             else:
                 logger.debug(
@@ -459,6 +476,29 @@ class Zappa(object):
     # CloudWatch Events
     ##
 
+    def add_event_source(
+            event_source, lambda_arn, target_function, boto_session, dry=False
+    ):
+        """
+        Given an event_source dictionary, create the object and add the event
+        source.
+        """
+
+        event_source_obj, ctx, funk = get_event_source(
+            event_source, lambda_arn, target_function, boto_session, dry=False
+        )
+        # TODO: Detect changes in config and refine exists algorithm
+        if not dry:
+            if not event_source_obj.status(funk):
+                event_source_obj.add(funk)
+                if event_source_obj.status(funk):
+                    return "successful"
+                else:
+                    return "failed"
+            else:
+                return "exists"
+
+        return "dryrun"
 
     ###
     # Async / SNS
@@ -522,7 +562,7 @@ class Zappa(object):
             return False, dynamodb_table
 
         # catch this exception (triggered if the table doesn't exist)
-        except botocore.exceptions.ClientError:
+        except ClientError:
             dynamodb_table = self.dynamodb_client.create_table(
                 AttributeDefinitions=[
                     {"AttributeName": "id", "AttributeType": "S"}],
@@ -536,7 +576,7 @@ class Zappa(object):
             if dynamodb_table:
                 try:
                     self._set_async_dynamodb_table_ttl(table_name)
-                except botocore.exceptions.ClientError:
+                except ClientError:
                     # this fails because the operation is async, so retry
                     time.sleep(10)
                     self._set_async_dynamodb_table_ttl(table_name)
@@ -600,7 +640,7 @@ class Zappa(object):
         print("Removing log group: {}".format(group_name))
         try:
             self.logs_client.delete_log_group(logGroupName=group_name)
-        except botocore.exceptions.ClientError as e:
+        except ClientError as e:
             print("Couldn't remove '{}' because of: {}".format(group_name, e))
 
     def remove_lambda_function_logs(self, lambda_function_name):

@@ -22,8 +22,6 @@ troposphere = "*"
 wsgi-request-logger = "*"
 pyyaml = ">==4.2b1"
 werkzeug = "*"
-crackerjack = {editable = true,git = "https://gitlab.com/lesleslie/crackerjack.git"}
-black = "===18.9b0"
 pipreqs = "*"
 
 [requires]

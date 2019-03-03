@@ -89,12 +89,12 @@ import importlib
 import inspect
 import json
 import os
-import uuid
+import time
 from functools import update_wrapper, wraps
+from uuid import uuid4
 
 import boto3
-import botocore
-import time
+from botocore.exceptions import NoRegionError
 
 from .utils import get_topic_name
 
@@ -110,7 +110,7 @@ try:
     SNS_CLIENT = aws_session.client('sns')
     STS_CLIENT = aws_session.client('sts')
     DYNAMODB_CLIENT = aws_session.client('dynamodb')
-except botocore.exceptions.NoRegionError as e: # pragma: no cover
+except NoRegionError as e:  # pragma: no cover
     # This can happen while testing on Travis, but it's taken care  of
     # during class initialization.
     pass
@@ -150,7 +150,7 @@ class LambdaAsyncResponse(object):
                 self.response_id = "MISCONFIGURED"
 
             else:
-                self.response_id = str(uuid.uuid4())
+                self.response_id = str(uuid4())
         else:
             self.response_id = None
 
@@ -230,7 +230,7 @@ class SnsAsyncResponse(LambdaAsyncResponse):
                 self.response_id = "MISCONFIGURED"
 
             else:
-                self.response_id = str(uuid.uuid4())
+                self.response_id = str(uuid4())
         else:
             self.response_id = None
 

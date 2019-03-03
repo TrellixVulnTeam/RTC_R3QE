@@ -16,13 +16,14 @@ from builtins import bytes, input
 from datetime import datetime, timedelta
 
 import argcomplete
-import botocore
 import click
 import hjson as json
 import pkg_resources
 import requests
 import toml
 import yaml
+from botocore.exceptions import BotoCoreError, ClientError
+from botocore.session import Session
 from click import BaseCommand, Context
 from click.exceptions import ClickException
 from click.globals import push_context
@@ -746,7 +747,7 @@ class ZappaCLI(object):
             if self.manage_roles:
                 try:
                     self.zappa.create_iam_roles()
-                except botocore.client.ClientError:
+                except ClientError:
                     raise ClickException(
                         click.style("Failed", fg="red")
                         + " to "
@@ -812,7 +813,7 @@ class ZappaCLI(object):
             self.lambda_arn = self.zappa.get_lambda_function(
                 function_name=self.lambda_name
             )
-        except botocore.client.ClientError:
+        except ClientError:
             # Register the Lambda function with that zip as the source
             # You'll also need to define the path to your lambda_handler code.
             kwargs = dict(
@@ -936,7 +937,7 @@ class ZappaCLI(object):
                 conf = function_response["Configuration"]
                 last_updated = parser.parse(conf["LastModified"])
                 last_updated_unix = time.mktime(last_updated.timetuple())
-            except botocore.exceptions.BotoCoreError as e:
+            except BotoCoreError as e:
                 click.echo(click.style(type(e).__name__, fg="red") + ": " + e.args[0])
                 sys.exit(-1)
             except Exception as e:
@@ -963,7 +964,7 @@ class ZappaCLI(object):
             if self.manage_roles:
                 try:
                     self.zappa.create_iam_roles()
-                except botocore.client.ClientError:
+                except ClientError:
                     click.echo(
                         click.style("Failed", fg="red")
                         + " to "
@@ -1319,7 +1320,7 @@ class ZappaCLI(object):
                 function_response = self.zappa.lambda_client.get_function(
                     FunctionName=self.lambda_name
                 )
-            except botocore.exceptions.ClientError as e:  # pragma: no cover
+            except ClientError as e:  # pragma: no cover
                 click.echo(
                     click.style("Function does not exist", fg="yellow")
                     + ", please "
@@ -1396,7 +1397,7 @@ class ZappaCLI(object):
                 FunctionName=self.lambda_name
             )
             function_arn = function_response["Configuration"]["FunctionArn"]
-        except botocore.exceptions.ClientError as e:  # pragma: no cover
+        except ClientError as e:  # pragma: no cover
             raise ClickException(
                 "Function does not exist, you should deploy first. Ex: zappa "
                 "deploy {}. "
@@ -1795,7 +1796,7 @@ class ZappaCLI(object):
         # Detect AWS profiles and regions
         # If anyone knows a more straightforward way to easily detect and
         # parse AWS profiles I'm happy to change this, feels like a hack
-        session = botocore.session.Session()
+        session = Session()
         config = session.full_config
         profiles = config.get("profiles", {})
         profile_names = list(profiles.keys())
@@ -2635,10 +2636,8 @@ the SSL
                 exclude=self.stage_config.get("exclude", []),
                 disable_progress=self.disable_progress,
                 archive_format="tarball",
-                temp_dir=self.stage_config.get("temp_dir", None),
-                local_wheels_dir=self.stage_config.get("local_wheels_dir", None),
-                remote_wheels_url=self.stage_config.get("remote_wheels_url",
-                                                        None),
+                wheels_bucket=self.stage_config.get("wheels_bucket",
+                                                    None),
             )
 
             # Make sure the normal venv is not included in the handler's zip
@@ -2654,10 +2653,8 @@ the SSL
                 exclude=exclude,
                 output=output,
                 disable_progress=self.disable_progress,
-                temp_dir=self.stage_config.get("temp_dir", None),
-                local_wheels_dir=self.stage_config.get("local_wheels_dir", None),
-                remote_wheels_url=self.stage_config.get("remote_wheels_url",
-                                                        None),
+                wheels_bucket=self.stage_config.get("wheels_bucket",
+                                                    None),
             )
         else:
 
@@ -2696,11 +2693,8 @@ the SSL
                 exclude=exclude,
                 output=output,
                 disable_progress=self.disable_progress,
-                temp_dir=self.stage_config.get("temp_dir", None),
-                local_wheels_dir=self.stage_config.get("local_wheels_dir",
-                                                       None),
-                remote_wheels_url=self.stage_config.get("remote_wheels_url",
-                                                        None),
+                wheels_bucket=self.stage_config.get("wheels_bucket",
+                                                    None),
             )
 
             # Warn if this is too large for Lambda.

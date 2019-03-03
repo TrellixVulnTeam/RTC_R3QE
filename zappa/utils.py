@@ -3,13 +3,13 @@ import datetime
 import fnmatch
 import io
 import re
+import shutil
 import sys
 from fnmatch import fnmatch
 from json import dumps
 from logging import getLogger
-from os import getcwd, listdir, path as op, sep, walk
+from os import getcwd, listdir, path as op, remove, sep, walk
 from pprint import PrettyPrinter
-from shutil import copy, copy2
 
 import durationpy
 from botocore.exceptions import ClientError
@@ -38,19 +38,31 @@ def ignore_files(files, patterns):
     for file in files:
         for pattern in patterns:
             if fnmatch(file, pattern):
-                print(f'Ignoring: ', file.split('/')[5:])
+                # print(f'Ignoring: ', file.split('/')[3:])
                 yield file
 
 
 def copytree(src, dst, excludes=None, symlinks=True, metadata=True):
-    files = get_files(src)
-    exclude_files = ignore_files(files, excludes)
-    for file in [f for f in list(files) if not f in (exclude_files)]:
-        print(f'Copying: ', file)
-        if metadata:
-            copy2(file, dst, follow_symlinks=symlinks)
-        else:
-            copy(file, dst, follow_symlinks=symlinks)
+    files = list(get_files(src))
+    ignore = list(ignore_files(files, excludes))
+
+    # for file in [f for f in files if f not in ignore]:
+    # print(f'Copying: ', file)
+    # if metadata:
+    #     copy2(file, dst, follow_symlinks=symlinks)
+    # else:
+    #     copy(file, dst, follow_symlinks=symlinks)
+
+    if metadata:
+        shutil.copytree(src, dst, symlinks=symlinks)
+    else:
+        shutil.copytree(src, dst, symlinks=symlinks, copy_function=shutil.copy)
+
+    for file in ignore:
+        file = file.replace(src, dst)
+        # print('remove ', file)
+        remove(file)
+
 
 
 def parse_s3_url(url):

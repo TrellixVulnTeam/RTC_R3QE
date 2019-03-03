@@ -1,23 +1,21 @@
 from dataclasses import dataclass
 from logging import getLogger
 from os import path as op, stat
-from typing import Any
 
 from botocore.exceptions import ClientError, ParamValidationError
 from tqdm import tqdm
 
+from .core import Zappa
 from .utils import human_size
 
 logger = getLogger(__name__)
 
 
 @dataclass
-class Storage:
-    boto_resource: Any
+class S3(Zappa):
     bucket_name: str
 
     def __post_init__(self):
-        self.s3 = self.boto_resource('s3')
         self.bucket = self.s3.Bucket(self.bucket_name)
 
     def is_dir(self, relative_path):
@@ -73,8 +71,8 @@ class Storage:
             bucket_name = self.bucket_name
         try:
             source_size = stat(source_path).st_size
-            print("Uploading {0} ({1})..".format(dest_path,
-                                                 human_size(source_size)))
+            print("Downloading {0} ({1})..".format(dest_path,
+                                                   human_size(source_size)))
             progress = tqdm(
                 total=float(op.getsize(source_path)),
                 unit_scale=True,
@@ -169,3 +167,7 @@ class Storage:
         ):  # pragma: no cover
             return False
         return True
+
+
+wheel_storage = S3('lambda-python-3-7-wheels')
+lambda_storage = S3('splashstand-deploy')

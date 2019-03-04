@@ -1,7 +1,9 @@
-from mock import Mock
 import sys
 import unittest
-from zappa.handler import LambdaHandler
+
+from mock import Mock
+
+from rockingteenagecombo.handler import LambdaHandler
 
 
 def no_args():

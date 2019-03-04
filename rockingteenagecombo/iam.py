@@ -2,17 +2,30 @@ from dataclasses import dataclass
 from json import dumps, loads
 from logging import getLogger
 
+from boto3 import resource
 from botocore.exceptions import ClientError
 
-from .core import Zappa
+from .config import ZappaConfig
 
 logger = getLogger(__name__)
 
 
-# iam = resource("iam")
+
 
 @dataclass
-class IAM(Zappa):
+class IAM(ZappaConfig):
+
+    def __post_init__(self):
+        self.iam = resource("iam")
+
+    def get_credentials_arn(self):
+        """
+        Given our role name, get and set the credentials_arn.
+
+        """
+        role = self.iam.Role(self.role_name)
+        self.credentials_arn = role.arn
+        return role, self.credentials_arn
 
     def create_iam_roles(self):
         """

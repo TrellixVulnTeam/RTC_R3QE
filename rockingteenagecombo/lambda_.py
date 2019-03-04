@@ -2,20 +2,30 @@ from dataclasses import dataclass
 from json import loads
 from logging import getLogger
 from os import remove
+from random import choice
+from string import ascii_uppercase, digits
 from time import sleep, time
 
+from boto3 import client
 from botocore.exceptions import ClientError
 from requests import get
 from tqdm import tqdm
 from troposphere import GetAtt, Ref, Template, apigateway as apigw
 
-from .core import Zappa
+from .apigateway import ApiGateway
+from .s3 import S3
 
 logger = getLogger(__name__)
 
 
 @dataclass
-class Lambda(Zappa):
+class Lambda(ApiGateway, S3):
+
+    def __post_init__(self):
+        self.lambda_ = client("lambda", config=self.long_config)
+        self.cognito = client("cognito-idp")
+        self.sts = client("sts")
+
     def create_lambda_function(
             self,
             bucket=None,
@@ -325,6 +335,35 @@ class Lambda(Zappa):
                                       cloudwatch_metrics_enabled),
                 ],
             )
+
+    def create_event_permission(self, lambda_name, principal, source_arn):
+        """
+        Create permissions to link to an event.
+
+        Related: http://docs.aws.amazon.com/lambda/latest/dg/with-s3-example
+        -configure-event-source.html
+        """
+        logger.debug(
+            "Adding new permission to invoke Lambda function: {}".format(
+                lambda_name)
+        )
+        permission_response = self.lambda_.add_permission(
+            FunctionName=lambda_name,
+            StatementId="".join(
+                choice(ascii_uppercase + digits) for _ in
+                range(8)
+            ),
+            Action="lambda:InvokeFunction",
+            Principal=principal,
+            SourceArn=source_arn,
+        )
+        if permission_response["ResponseMetadata"]["HTTPStatusCode"] != \
+                201:
+            print("Problem creating permission to invoke Lambda function")
+            return None  # XXX: Raise?
+
+        return permission_response
+
 
     def update_cognito(self, lambda_name, user_pool, lambda_configs,
                        lambda_arn):

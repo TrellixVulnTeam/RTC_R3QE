@@ -1,16 +1,20 @@
 # -*- coding: utf8 -*-
-import boto3
-import mock
 import os
 import unittest
+
+import boto3
+import mock
 
 try:
     from mock import patch
 except ImportError:
     from unittest.mock import patch
 
-from zappa.asynchronous import AsyncException, LambdaAsyncResponse, SnsAsyncResponse
-from zappa.asynchronous import import_and_get_task, get_func_task_path
+from rockingteenagecombo.asynchronous import (AsyncException,
+                                              LambdaAsyncResponse,
+                                              SnsAsyncResponse)
+from rockingteenagecombo.asynchronous import (import_and_get_task,
+                                              get_func_task_path)
 
 
 class TestZappa(unittest.TestCase):

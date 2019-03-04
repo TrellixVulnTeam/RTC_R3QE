@@ -5,6 +5,7 @@ import os
 import random
 import shutil
 import string
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -12,25 +13,31 @@ from io import BytesIO
 
 import flask
 import mock
-import sys
 from click.exceptions import ClickException
 from click.globals import resolve_color_default
-from zappa.cli import ZappaCLI, disable_click_colors, shamelessly_promote
-from zappa.core import ASSUME_POLICY, ATTACH_POLICY, Zappa
-from zappa.ext.django_zappa import get_django_wsgi
-from zappa.letsencrypt import (create_chained_certificate, create_domain_csr,
-                               create_domain_key, encode_certificate,
-                               get_cert_and_update_domain,
-                               gettempdir, parse_account_key, parse_csr,
-                               register_account, sign_certificate)
-from zappa.utils import (InvalidAwsLambdaName,
-                         conflicts_with_a_neighbouring_module,
-                         contains_python_files_or_subdirs,
-                         detect_django_settings, detect_flask_apps,
-                         get_venv_from_python_version, human_size,
-                         is_valid_bucket_name, parse_s3_url,
-                         string_to_timestamp, titlecase_keys, validate_name)
-from zappa.wsgi import common_log, create_wsgi_request
+from rockingteenagecombo.ext.django_zappa import get_django_wsgi
+
+from rockingteenagecombo.cli import (ZappaCLI, disable_click_colors,
+                                     shamelessly_promote)
+from rockingteenagecombo.core import ASSUME_POLICY, ATTACH_POLICY, Zappa
+from rockingteenagecombo.letsencrypt import (create_chained_certificate,
+                                             create_domain_csr,
+                                             create_domain_key,
+                                             encode_certificate,
+                                             get_cert_and_update_domain,
+                                             gettempdir, parse_account_key,
+                                             parse_csr,
+                                             register_account, sign_certificate)
+from rockingteenagecombo.utils import (InvalidAwsLambdaName,
+                                       conflicts_with_a_neighbouring_module,
+                                       contains_python_files_or_subdirs,
+                                       detect_django_settings,
+                                       detect_flask_apps,
+                                       get_venv_from_python_version, human_size,
+                                       is_valid_bucket_name, parse_s3_url,
+                                       string_to_timestamp, titlecase_keys,
+                                       validate_name)
+from rockingteenagecombo.wsgi import common_log, create_wsgi_request
 
 if sys.version_info[0] < 3:
     from cStringIO import StringIO as OldStringIO

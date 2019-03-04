@@ -2,8 +2,8 @@
 import sys
 import unittest
 
-from zappa.wsgi import create_wsgi_request
-from zappa.middleware import ZappaWSGIMiddleware, all_casings
+from rockingteenagecombo.middleware import ZappaWSGIMiddleware, all_casings
+from rockingteenagecombo.wsgi import create_wsgi_request
 
 try:
     unicode        # Python 2

@@ -1,10 +1,10 @@
 import base64
 import logging
 from io import BytesIO
+from sys import stderr
 from urllib.parse import urlencode
 
 from requestlogger import ApacheFormatter
-from sys import stderr
 from werkzeug import urls
 
 from .utils import titlecase_keys

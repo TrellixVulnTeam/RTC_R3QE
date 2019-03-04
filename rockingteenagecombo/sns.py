@@ -1,11 +1,17 @@
 from dataclasses import dataclass
 
-from .core import Zappa
+from boto3 import resource
+
+from .lambda_ import Lambda
 from .utils import add_event_source, get_topic_name
 
 
 @dataclass
-class SNS(Zappa):
+class SNS(Lambda):
+
+    def __post_init__(self):
+        self.sns = resource("sns")
+
     def create_async_sns_topic(self, lambda_name, lambda_arn):
         """
         Create the SNS-based async topic.

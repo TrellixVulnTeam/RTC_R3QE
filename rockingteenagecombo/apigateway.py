@@ -2,16 +2,28 @@ from dataclasses import dataclass
 from logging import getLogger
 from time import time
 
+from boto3 import client
 from botocore.exceptions import ClientError
-from troposphere import Parameter, Ref, apigateway as apigw
+from troposphere import Parameter, Ref, Template, apigateway as apigw
 
-from .core import Zappa
+from .iam import IAM
+from .logs import Logs
 
 logger = getLogger(__name__)
 
 
 @dataclass
-class ApiGateway(Zappa):
+class ApiGateway(IAM, Logs):
+
+    def __post_init__(self):
+        self.apigateway = client("apigateway")
+        self.acm = client("acm", config=self.east_config)
+        self.logs = client("logs")
+
+        self.cloudformation = client("cloudformation")
+        self.cloudformation_template = Template()
+        self.cloudformation_api_resources = list()
+        self.cloudformation_parameters = dict()
 
     def create_and_setup_methods(
             self,
@@ -117,6 +129,16 @@ class ApiGateway(Zappa):
 
         integration.Uri = uri
         method.Integration = integration
+
+    def get_patch_op(self, keypath, value, op="replace"):
+        """
+        Return an object that describes a change of configuration on the
+        given staging.
+        Setting will be applied on all available HTTP methods.
+        """
+        if isinstance(value, bool):
+            value = str(value).lower()
+        return {"op": op, "path": "/*/*/{}".format(keypath), "value": value}
 
     def deploy_api_gateway(
             self,
@@ -319,6 +341,41 @@ class ApiGateway(Zappa):
             except:  # pragma: no cover
                 # We don't even have an API deployed. That's okay!
                 return None
+
+    def get_rest_apis(self, project_name):
+        """
+        Generator that allows to iterate per every available apis.
+        """
+        all_apis = self.apigateway.get_rest_apis(limit=500)
+
+        for api in all_apis["items"]:
+            if api["name"] != project_name:
+                continue
+            yield api
+
+    def delete_stack(self, name, wait=False):
+        """
+        Delete the CF stack managed by Zappa.
+        """
+        try:
+            stack = \
+                self.cloudformation.describe_stacks(StackName=name)["Stacks"][0]
+        except:  # pragma: no cover
+            print("No Zappa stack named {0}".format(name))
+            return False
+
+        tags = {x["Key"]: x["Value"] for x in stack["Tags"]}
+        if tags.get("ZappaProject") == name:
+            self.cloudformation.delete_stack(StackName=name)
+            if wait:
+                waiter = self.cloudformation.get_waiter("stack_delete_complete")
+                print("Waiting for stack {0} to be deleted..".format(name))
+                waiter.wait(StackName=name)
+            return True
+        else:
+            print(
+                "ZappaProject tag not found on {0}, doing nothing".format(name))
+            return False
 
     def undeploy_api_gateway(self, lambda_name, domain_name=None,
                              base_path=None):

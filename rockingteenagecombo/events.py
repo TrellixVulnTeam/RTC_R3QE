@@ -5,16 +5,58 @@ from logging import getLogger
 from random import choice
 from string import digits
 
+from boto3 import client
 from botocore.exceptions import ClientError
 
-from .core import Zappa
+from .lambda_ import Lambda
+# from .core import Zappa
 from .utils import add_event_source, get_event_source, remove_event_source
 
 logger = getLogger(__name__)
 
 
 @dataclass
-class Events(Zappa):
+class Events(Lambda):
+
+    def __post_init__(self):
+        self.events = client("events")
+
+    @staticmethod
+    def service_from_arn(arn):
+        return arn.split(":")[2]
+
+    @staticmethod
+    def get_event_name(lambda_name, name):
+        """
+        Returns an AWS-valid Lambda event name.
+
+        """
+        return "{prefix:.{width}}-{postfix}".format(
+            prefix=lambda_name, width=max(0, 63 - len(name)), postfix=name
+        )[:64]
+
+    def get_event_rule_names_for_lambda(self, lambda_arn):
+        """
+        Get all of the rule names associated with a lambda function.
+        """
+        response = self.events.list_rule_names_by_target(
+            TargetArn=lambda_arn)
+        rule_names = response["RuleNames"]
+        # Iterate when the results are paginated
+        while "NextToken" in response:
+            response = self.events.list_rule_names_by_target(
+                TargetArn=lambda_arn, NextToken=response["NextToken"]
+            )
+            rule_names.extend(response["RuleNames"])
+        return rule_names
+
+    def get_event_rules_for_lambda(self, lambda_arn):
+        """
+        Get all of the rule details associated with this function.
+        """
+        rule_names = self.get_event_rule_names_for_lambda(lambda_arn=lambda_arn)
+        return [self.events.describe_rule(Name=r) for r in rule_names]
+
     def get_event_source_status(
             event_source, lambda_arn, target_function, boto_session, dry=False
     ):
@@ -321,8 +363,6 @@ class Events(Zappa):
         # prefix scheduled event names with lambda name. So we can look them
         # up later via the prefix.
         return Zappa.get_event_name(lambda_name, name)
-
-
 
     @staticmethod
     def get_hashed_rule_name(event, function, lambda_name):

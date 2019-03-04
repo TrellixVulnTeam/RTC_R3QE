@@ -5,11 +5,11 @@ import string
 import unittest
 
 import mock
-from zappa.cli import ZappaCLI
-from zappa.core import Zappa
-from zappa.handler import LambdaHandler
-from zappa.utils import (add_event_source, remove_event_source)
 
+from rockingteenagecombo.cli import ZappaCLI
+from rockingteenagecombo.core import Zappa
+from rockingteenagecombo.handler import LambdaHandler
+from rockingteenagecombo.utils import (add_event_source, remove_event_source)
 from .utils import placebo_session
 
 

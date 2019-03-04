@@ -207,12 +207,25 @@ class Archive:
         #     package_name, package_version
         # )
 
-        wheels = list(wheel_storage.list_tree())
-        wheel_file = [f for f in wheels if ((package_version in f) and (
-                package_name.lower() in f))][0]
+        wheels = list(wheel_storage.list_s3_tree())
+        wheel_files = [f for f in wheels
+                       if ((package_version == f.split('-')[1])
+                           and (package_name == f.split('-')[0].lower(
+                    ).replace('_', '-')))]
+        try:
+            wheel_file = wheel_files[0]
+        except IndexError:
+            print(f'Could not find wheel for:  '
+                  f'{package_name}=={package_version}')
+            if package_name == 'lambda-packages':
+                return False
+            raise
+
+        # wheel_file = [f for f in wheels if ((package_version in f) and (
+        #         package_name.lower() in f))][0]
 
         wheel_path = op.join(cached_wheels_dir, wheel_file)
-        print('wheel path ', wheel_path)
+        # print('wheel path ', wheel_path)
 
         # lambda_package = lambda_packages[wheel_name][runtime]
 
@@ -271,21 +284,28 @@ class Archive:
         # print(package_name, package_version)
 
         cached_wheels_dir = op.join(tempfile.gettempdir(), "cached_wheels")
-        print(cached_wheels_dir)
+        # print(cached_wheels_dir)
         # print(listdir(cached_wheels_dir))
 
         # wheel_file = "{0!s}-{1!s}-{2!s}".format(
         #     package_name, package_version, manylinux_wheel_file_suffix
         # )
 
-        wheels = list(wheel_storage.list_tree())
-        pprint(wheels)
-        print(package_name.lower(), package_version)
-        wheel_file = [f for f in wheels
-                      if ((package_version == f.split('-')[1])
-                          and (package_name == f.split('-')[0].lower(
-                    ).replace('_', '-')))][0]
-        print(wheel_file)
+        wheels = list(wheel_storage.list_s3_tree())
+        # pprint(wheels)
+        # print(package_name.lower(), package_version)
+        wheel_files = [f for f in wheels
+                       if ((package_version == f.split('-')[1])
+                           and (package_name == f.split('-')[0].lower(
+                    ).replace('_', '-')))]
+        try:
+            wheel_file = wheel_files[0]
+        except IndexError:
+            print(f'Could not find wheel for:  '
+                  f'{package_name}=={package_version}')
+            if package_name == 'lambda-packages':
+                return False
+            raise
         if wheel_file in listdir(cached_wheels_dir):
             return True
 
@@ -327,25 +347,34 @@ class Archive:
         if not op.isdir(cached_wheels_dir):
             makedirs(cached_wheels_dir)
 
-        wheels = list(wheel_storage.list_tree())
-        wheel_file = [f for f in wheels
-                      if ((package_version == f.split('-')[1])
-                          and (package_name == f.split('-')[0].lower(
-                    ).replace('_', '-')))][0]
+        wheels = list(wheel_storage.list_s3_tree())
+        wheel_files = [f for f in wheels
+                       if ((package_version == f.split('-')[1])
+                           and (package_name == f.split('-')[0].lower(
+                    ).replace('_', '-')))]
+        try:
+            wheel_file = wheel_files[0]
+        except IndexError:
+            print(f'Could not find wheel for:  '
+                  f'{package_name}=={package_version}')
+            if package_name == 'lambda-packages':
+                return False
+            raise
 
         wheel_path = op.join(cached_wheels_dir, wheel_file)
 
         if not op.exists(wheel_path):
-            print(list(wheel_storage.list_tree('/')))
-            if wheel_file in list(wheel_storage.list_tree('/')):
+            # pprint(list(wheel_storage.list_s3_tree()))
+            if wheel_file in list(wheel_storage.list_s3_tree()):
                 print(
-                    " - {}=={}: Downloading...".format(package_name,
-                                                       package_version))
-                wheel_storage.get_file(wheel_file, wheel_path, disable_progress)
+                    "Downloading:   {}=={}".format(package_name,
+                                                   package_version))
+                wheel_storage.get_s3_file(wheel_file, wheel_path,
+                                          disable_progress)
         else:
-            print(" - {}=={}: Using locally cached manylinux wheel".format(
+            print("Using local:  {}=={}:".format(
                 package_name, package_version))
-
+        print(f'\t==>\t{wheel_file}')
         return wheel_path
 
     def create_lambda_zip(
@@ -533,7 +562,7 @@ class Archive:
             for (
                     installed_package_name,
                     installed_package_version,
-            ) in installed_packages.items():
+            ) in sorted(installed_packages.items()):
                 if self.have_correct_lambda_package_version(
                         installed_package_name, installed_package_version
                 ):
@@ -704,8 +733,8 @@ class Archive:
         archivef.close()
         print('Cleaning up...')
         # Trash the temp directory
-        # rmtree(temp_project_path)
-        # rmtree(temp_package_path)
+        rmtree(temp_project_path)
+        rmtree(temp_package_path)
         if op.isdir(venv) and slim_handler:
             # Remove the temporary handler venv folder
             rmtree(venv)

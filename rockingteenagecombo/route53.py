@@ -2,13 +2,14 @@ from dataclasses import dataclass
 
 from boto3 import client
 
-from .core import Zappa
-
-route53 = client("route53")
+from .apigateway import ApiGateway
 
 
 @dataclass
-class Route53(Zappa):
+class Route53(ApiGateway):
+
+    def __post_init__(self):
+        self.route53 = client("route53")
 
     def get_all_zones(self):
         """Same behaviour of list_host_zones, but transparently handling

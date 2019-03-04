@@ -1,5 +1,6 @@
-from cgi import parse_qs, escape
-from zappa.asynchronous import task
+from cgi import escape, parse_qs
+
+from rockingteenagecombo.asynchronous import task
 
 
 def hello_world(environ, start_response):

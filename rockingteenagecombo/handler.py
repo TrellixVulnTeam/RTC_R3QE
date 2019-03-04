@@ -6,20 +6,20 @@ import inspect
 import json
 import logging
 import os
+import sys
 import tarfile
 import traceback
 from typing import Callable
 
 import boto3
-import sys
 from werkzeug.wrappers import Response
 
 # This file may be copied into a project's root,
 # so handle both scenarios.
 try:
-    from zappa.middleware import ZappaWSGIMiddleware
-    from zappa.wsgi import create_wsgi_request, common_log
-    from zappa.utils import parse_s3_url
+    from rockingteenagecombo.middleware import ZappaWSGIMiddleware
+    from rockingteenagecombo.wsgi import create_wsgi_request, common_log
+    from rockingteenagecombo.utils import parse_s3_url
 except ImportError as e:  # pragma: no cover
     from .middleware import ZappaWSGIMiddleware
     from .wsgi import create_wsgi_request, common_log

@@ -2,21 +2,22 @@ from dataclasses import dataclass
 from time import time
 
 from boto3 import client
-
-from .core import Zappa
-
-logs = client("logs")
+from botocore.exceptions import ClientError
 
 
 @dataclass
-class Logs(Zappa):
+class Logs(object):
+
+    def __post_init__(self):
+        self.logs = client("logs")
+
     def fetch_logs(self, lambda_name, filter_pattern="", limit=10000,
                    start_time=0):
         """
         Fetch the CloudWatch logs for a given Lambda name.
         """
         log_name = "/aws/lambda/" + lambda_name
-        streams = logs.describe_log_streams(
+        streams = self.logs.describe_log_streams(
             logGroupName=log_name, descending=True, orderBy="LastEventTime"
         )
 
@@ -35,7 +36,7 @@ class Logs(Zappa):
             start_time = start_time * 1000
             end_time = int(time()) * 1000
 
-            response = logs.filter_log_events(
+            response = self.logs.filter_log_events(
                 logGroupName=log_name,
                 logStreamNames=all_names,
                 startTime=start_time,
@@ -49,6 +50,16 @@ class Logs(Zappa):
                 events += response["events"]
 
         return sorted(events, key=lambda k: k["timestamp"])
+
+    def remove_log_group(self, group_name):
+        """
+        Filter all log groups that match the name given in log_filter.
+        """
+        print("Removing log group: {}".format(group_name))
+        try:
+            self.logs.delete_log_group(logGroupName=group_name)
+        except ClientError as e:
+            print("Couldn't remove '{}' because of: {}".format(group_name, e))
 
     def remove_lambda_function_logs(self, lambda_function_name):
         """

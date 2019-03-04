@@ -14,6 +14,7 @@ import time
 import zipfile
 from builtins import bytes, input
 from datetime import datetime, timedelta
+from os import path as op
 
 import argcomplete
 import click
@@ -32,17 +33,14 @@ from dateutil import parser
 from .archive import Archive
 from .config import API_GATEWAY_REGIONS
 from .core import Zappa
-from .utils import (
-    check_new_version_available,
-    detect_flask_apps,
-    get_runtime_from_python_version,
-    get_venv_from_python_version,
-    human_size,
-    is_valid_bucket_name,
-    parse_s3_url,
-    string_to_timestamp,
-    validate_name,
-)
+from .utils import (check_new_version_available, detect_flask_apps,
+                    get_runtime_from_python_version,
+                    get_venv_from_python_version, human_size,
+                    is_valid_bucket_name, parse_s3_url, ppformat, pprint,
+                    string_to_timestamp, validate_name)
+
+for p in [pprint, ppformat]:
+    pass
 
 CUSTOM_SETTINGS = [
     "apigateway_policy",
@@ -789,7 +787,7 @@ class ZappaCLI(object):
             self.callback("zip")
 
             # Upload it to S3
-            success = self.zappa.save_to_s3(
+            success = self.zappa.lambda_storage.save(
                 self.zip_path,
                 self.s3_bucket_name,
                 disable_progress=self.disable_progress,
@@ -801,7 +799,7 @@ class ZappaCLI(object):
             # this slim handler zip
             if self.stage_config.get("slim_handler", False):
                 # https://github.com/Miserlou/Zappa/issues/510
-                success = self.zappa.save_to_s3(
+                success = self.zappa.lambda_storage.save(
                     self.handler_path,
                     self.s3_bucket_name,
                     disable_progress=self.disable_progress,
@@ -815,7 +813,7 @@ class ZappaCLI(object):
                                         "project.tar.gz".format(
                     self.api_stage, self.project_name
                 ))
-                success = self.zappa.copy_on_s3(
+                success = self.zappa.lambda_storage.copy(
                     self.zip_path,
                     current_project_name,
                     bucket_name=self.s3_bucket_name,
@@ -1019,7 +1017,7 @@ class ZappaCLI(object):
 
             # Upload it to S3
             if not no_upload:
-                success = self.zappa.save_to_s3(
+                success = self.zappa.lambda_storage.save(
                     self.zip_path,
                     self.s3_bucket_name,
                     disable_progress=self.disable_progress,
@@ -1032,7 +1030,7 @@ class ZappaCLI(object):
                 # use this slim handler zip
                 if self.stage_config.get("slim_handler", False):
                     # https://github.com/Miserlou/Zappa/issues/510
-                    success = self.zappa.save_to_s3(
+                    success = self.zappa.lambda_storage.save(
                         self.handler_path,
                         self.s3_bucket_name,
                         disable_progress=self.disable_progress,
@@ -1048,7 +1046,7 @@ class ZappaCLI(object):
                             self.api_stage, self.project_name
                         )
                     )
-                    success = self.zappa.copy_on_s3(
+                    success = self.zappa.lambda_storage.copy(
                         self.zip_path,
                         current_project_name,
                         bucket_name=self.s3_bucket_name,
@@ -2199,7 +2197,7 @@ the SSL
 
             if account_key_location.startswith("s3://"):
                 bucket, key_name = parse_s3_url(account_key_location)
-                self.zappa.s3.download_file(
+                self.zappa.lambda_storage.get_file(
                     bucket, key_name, os.path.join(gettempdir(), "account.key")
                 )
             else:
@@ -2339,26 +2337,20 @@ the SSL
 
         if callback:
             (mod_path, cb_func_name) = callback.rsplit(".", 1)
-
             try:  # Prefer callback in working directory
                 if mod_path.count(
                         ".") >= 1:  # Callback function is nested in a folder
                     (mod_folder_path, mod_name) = mod_path.rsplit(".", 1)
-                    mod_folder_path_fragments = mod_folder_path.split(".")
-                    working_dir = os.path.join(os.getcwd(),
-                                               *mod_folder_path_fragments)
+                    # mod_folder_path_fragments = mod_folder_path.split(".")
+                    # working_dir = os.path.join(os.getcwd(),
+                    #                            *mod_folder_path_fragments)
+                    working_dir = op.join(os.getcwd(), op.pardir)
                 else:
                     mod_name = mod_path
                     working_dir = os.getcwd()
-
-                working_dir_importer = pkgutil.get_importer(working_dir)
-                module_ = working_dir_importer.find_module(
-                    mod_name).load_module(
-                    mod_name
-                )
-
+                sys.path.insert(0, working_dir)
+                module_ = importlib.import_module(mod_name)
             except (ImportError, AttributeError):
-
                 try:  # Callback func might be in virtualenv
                     module_ = importlib.import_module(mod_path)
                 except ImportError:  # pragma: no cover
@@ -2996,11 +2988,11 @@ the SSL
 
         # Remove the uploaded zip from S3, because it is now registered..
         if self.stage_config.get("delete_s3_zip", True):
-            self.zappa.delete_from_s3(self.zip_path, self.s3_bucket_name)
+            self.zappa.lambda_storage.delete(self.zip_path, self.s3_bucket_name)
             if self.stage_config.get("slim_handler", False):
                 # Need to keep the project zip as the slim handler uses it.
-                self.zappa.delete_from_s3(self.handler_path,
-                                          self.s3_bucket_name)
+                self.zappa.lambda_storage.delete(self.handler_path,
+                                                 self.s3_bucket_name)
 
     def on_exit(self):
         """

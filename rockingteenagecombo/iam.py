@@ -14,9 +14,7 @@ logger = getLogger(__name__)
 
 @dataclass
 class IAM(ZappaConfig):
-
-    def __post_init__(self):
-        self.iam = resource("iam")
+    iam = resource("iam")
 
     def get_credentials_arn(self):
         """

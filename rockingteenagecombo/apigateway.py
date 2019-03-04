@@ -14,16 +14,14 @@ logger = getLogger(__name__)
 
 @dataclass
 class ApiGateway(IAM, Logs):
+    apigateway = client("apigateway")
+    acm = client("acm")
+    logs = client("logs")
 
-    def __post_init__(self):
-        self.apigateway = client("apigateway")
-        self.acm = client("acm", config=self.east_config)
-        self.logs = client("logs")
-
-        self.cloudformation = client("cloudformation")
-        self.cloudformation_template = Template()
-        self.cloudformation_api_resources = list()
-        self.cloudformation_parameters = dict()
+    cloudformation = client("cloudformation")
+    cloudformation_template = Template()
+    cloudformation_api_resources = list()
+    cloudformation_parameters = dict()
 
     def create_and_setup_methods(
             self,
@@ -186,7 +184,7 @@ class ApiGateway(IAM, Logs):
         )
 
         return "https://{}.execute-api.{}.amazonaws.com/{}".format(
-            api_id, self.boto_session.region_name, stage_name
+            api_id, self.aws_region, stage_name
         )
 
     def add_binary_support(self, api_id, cors=False):
@@ -414,7 +412,7 @@ class ApiGateway(IAM, Logs):
         api_id = self.get_api_id(lambda_name)
         if api_id:
             return "https://{}.execute-api.{}.amazonaws.com/{}".format(
-                api_id, self.boto_session.region_name, stage_name
+                api_id, self.aws_region, stage_name
             )
         else:
             return None

@@ -19,12 +19,11 @@ logger = getLogger(__name__)
 
 
 @dataclass
-class Lambda(ApiGateway, S3):
-
-    def __post_init__(self):
-        self.lambda_ = client("lambda", config=self.long_config)
-        self.cognito = client("cognito-idp")
-        self.sts = client("sts")
+class Lambda(ApiGateway):
+    lambda_storage = S3('splashstand-deploy')
+    lambda_ = client("lambda")
+    cognito = client("cognito-idp")
+    sts = client("sts")
 
     def create_lambda_function(
             self,
@@ -364,7 +363,6 @@ class Lambda(ApiGateway, S3):
 
         return permission_response
 
-
     def update_cognito(self, lambda_name, user_pool, lambda_configs,
                        lambda_arn):
         LambdaConfig = {}
@@ -576,39 +574,41 @@ class Lambda(ApiGateway, S3):
         if not description:
             description = "Created automatically by Zappa."
         restapi.Description = description
-        if self.boto_session.region_name == "us-gov-west-1":
-            endpoint = apigw.EndpointConfiguration()
-            endpoint.Types = ["REGIONAL"]
-            restapi.EndpointConfiguration = endpoint
+        # if self.boto_session.region_name == "us-gov-west-1":
+        #     endpoint = apigw.EndpointConfiguration()
+        #     endpoint.Types = ["REGIONAL"]
+        #     restapi.EndpointConfiguration = endpoint
         if self.apigateway_policy:
             restapi.Policy = loads(self.apigateway_policy)
         self.cloudformation_template.add_resource(restapi)
 
         root_id = GetAtt(restapi, "RootResourceId")
-        invocation_prefix = (
-            "aws" if self.boto_session.region_name != "us-gov-west-1" else
-            "aws-us-gov"
-        )
+        # invocation_prefix = (
+        #     "aws" if self.boto_session.region_name != "us-gov-west-1" else
+        #     "aws-us-gov"
+        # )
+        invocation_prefix = "aws"
         invocations_uri = (
                 "arn:"
                 + invocation_prefix
                 + ":apigw:"
-                + self.boto_session.region_name
+                + self.aws_region
                 + ":lambda:path/2015-03-31/functions/"
                 + lambda_arn
                 + "/invocations"
         )
 
         authorizer_resource = None
-        if authorizer:
-            authorizer_lambda_arn = authorizer.get("arn", lambda_arn)
-            lambda_uri = (f"arn:{invocation_prefix}:apigw:"
-                          f"{self.boto_session.region_name}:lambda:path/2015-03"
-                          f"-31/functions/{authorizer_lambda_arn}/invocations"
-                          )
-            authorizer_resource = self.create_authorizer(
-                restapi, lambda_uri, authorizer
-            )
+        # if authorizer:
+        #     authorizer_lambda_arn = authorizer.get("arn", lambda_arn)
+        #     lambda_uri = (f"arn:{invocation_prefix}:apigw:"
+        #                   f"{
+        #                   self.boto_session.region_name}:lambda:path/2015-03"
+        #                   f"-31/functions/{authorizer_lambda_arn}/invocations"
+        #                   )
+        #     authorizer_resource = self.create_authorizer(
+        #         restapi, lambda_uri, authorizer
+        #     )
 
         self.create_and_setup_methods(
             restapi,
@@ -717,14 +717,14 @@ class Lambda(ApiGateway, S3):
                 )
             )
 
-        self.s3.save(template, working_bucket,
-                     disable_progress=disable_progress)
-        if self.boto_session.region_name == "us-gov-west-1":
-            url = "https://s3-us-gov-west-1.amazonaws.com/{0}/{1}".format(
-                working_bucket, template
-            )
-        else:
-            url = "https://s3.amazonaws.com/{0}/{1}".format(working_bucket,
+        self.lambda_storage.save(template, working_bucket,
+                                 disable_progress=disable_progress)
+        # if self.boto_session.region_name == "us-gov-west-1":
+        #     url = "https://s3-us-gov-west-1.amazonaws.com/{0}/{1}".format(
+        #         working_bucket, template
+        #     )
+        # else:
+        url = "https://s3.amazonaws.com/{0}/{1}".format(working_bucket,
                                                             template)
 
         tags = [
@@ -825,4 +825,4 @@ class Lambda(ApiGateway, S3):
         except OSError:
             pass
 
-        self.s3.delete(template, working_bucket)
+        self.lambda_storage.delete(template, working_bucket)

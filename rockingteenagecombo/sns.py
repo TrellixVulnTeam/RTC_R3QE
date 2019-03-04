@@ -8,9 +8,7 @@ from .utils import add_event_source, get_topic_name
 
 @dataclass
 class SNS(Lambda):
-
-    def __post_init__(self):
-        self.sns = resource("sns")
+    sns = resource("sns")
 
     def create_async_sns_topic(self, lambda_name, lambda_arn):
         """

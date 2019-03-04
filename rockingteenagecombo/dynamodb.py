@@ -7,9 +7,7 @@ from botocore.exceptions import ClientError
 
 @dataclass
 class DynamoDB(object):
-
-    def __post_init__(self):
-        self.dynamodb = resource("dynamodb")
+    dynamodb = resource("dynamodb")
 
     def _set_async_dynamodb_table_ttl(self, table_name):
         self.dynamodb.update_time_to_live(

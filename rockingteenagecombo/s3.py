@@ -19,10 +19,10 @@ class S3:
         self.s3 = resource("s3")
         self.bucket = self.s3.Bucket(self.bucket_name)
 
-    def is_s3_dir(self, relative_path):
+    def is_dir(self, relative_path):
         return relative_path.endswith("/")
 
-    def exists_on_s3(self, relative_path):
+    def exists(self, relative_path):
         if not relative_path:
             return False
         obj = self.s3.Object(self.bucket_name, relative_path)
@@ -44,7 +44,7 @@ class S3:
         obj = self.s3.Object(self.bucket_name, source_path)
         obj.wait_until_not_exists()
 
-    def list_s3_tree(self, subdir=None):
+    def list_tree(self, subdir=None):
         if subdir and not subdir.endswith("/"):
             subdir += "/"
         kw = dict()
@@ -54,7 +54,7 @@ class S3:
         for obj in resp:
             yield obj.key
 
-    def get_s3_obj(self, source_path):
+    def get_obj(self, source_path):
         obj = self.s3.Object(self.bucket_name, source_path)
         resp = None
         try:
@@ -66,8 +66,8 @@ class S3:
                 raise
         return resp["Body"].read()
 
-    def get_s3_file(self, source_path, dest_path, bucket_name=None,
-                    disable_progress=False):
+    def get_file(self, source_path, dest_path, bucket_name=None,
+                 disable_progress=False):
         if not bucket_name:
             bucket_name = self.bucket_name
         try:
@@ -96,8 +96,8 @@ class S3:
             # return False
         return True
 
-    def save_to_s3(self, source_path, bucket_name=None,
-                   disable_progress=False):
+    def save(self, source_path, bucket_name=None,
+             disable_progress=False):
         if not bucket_name:
             bucket_name = self.bucket_name
 
@@ -138,7 +138,7 @@ class S3:
             return False
         return True
 
-    def copy_on_s3(self, src_path, dest_path, bucket_name):
+    def copy(self, src_path, dest_path, bucket_name):
         obj = self.s3.Object(self.bucket_name, dest_path)
         copy_source = dict(Key=src_path, Bucket=bucket_name)
         obj_args = dict(CopySource=copy_source)
@@ -152,7 +152,7 @@ class S3:
         else:
             return True
 
-    def delete_from_s3(self, source_path, bucket_name=None):
+    def delete(self, source_path, bucket_name=None):
         if not bucket_name:
             bucket_name = self.bucket_name
 
@@ -169,6 +169,3 @@ class S3:
         ):  # pragma: no cover
             return False
         return True
-
-
-wheel_storage = S3('lambda-wheels-3-7')

@@ -7,19 +7,17 @@ from .apigateway import ApiGateway
 
 @dataclass
 class Route53(ApiGateway):
-
-    def __post_init__(self):
-        self.route53 = client("route53")
+    route53 = client("route53")
 
     def get_all_zones(self):
         """Same behaviour of list_host_zones, but transparently handling
         pagination."""
         zones = {"HostedZones": []}
 
-        new_zones = route53.list_hosted_zones(MaxItems="100")
+        new_zones = self.route53.list_hosted_zones(MaxItems="100")
         while new_zones["IsTruncated"]:
             zones["HostedZones"] += new_zones["HostedZones"]
-            new_zones = route53.list_hosted_zones(
+            new_zones = self.route53.list_hosted_zones(
                 Marker=new_zones["NextMarker"], MaxItems="100"
             )
 
@@ -33,7 +31,7 @@ class Route53(ApiGateway):
         zone_id = self.get_hosted_zone_id_for_domain(domain_name)
 
         is_apex = (
-                route53.get_hosted_zone(Id=zone_id)["HostedZone"]["Name"][
+                self.route53.get_hosted_zone(Id=zone_id)["HostedZone"]["Name"][
                 :-1]
                 == domain_name
         )
@@ -68,7 +66,7 @@ class Route53(ApiGateway):
         # Tried to create an alias that targets
         # d1awfeji80d0k2.cloudfront.net., type A in zone Z1XWOQP59BYF6Z,
         # but the alias target name does not lie within the target zone
-        response = route53.change_resource_record_sets(
+        response = self.route53.change_resource_record_sets(
             HostedZoneId=zone_id,
             ChangeBatch={
                 "Changes": [
@@ -165,7 +163,7 @@ class Route53(ApiGateway):
         Set DNS challenge TXT.
         """
         print("Setting DNS challenge..")
-        resp = route53.change_resource_record_sets(
+        resp = self.route53.change_resource_record_sets(
             HostedZoneId=zone_id,
             ChangeBatch=self.get_dns_challenge_change_batch(
                 "UPSERT", domain, txt_challenge
@@ -179,7 +177,7 @@ class Route53(ApiGateway):
         Remove DNS challenge TXT.
         """
         print("Deleting DNS challenge..")
-        resp = route53.change_resource_record_sets(
+        resp = self.route53.change_resource_record_sets(
             HostedZoneId=zone_id,
             ChangeBatch=self.get_dns_challenge_change_batch(
                 "DELETE", domain, txt_challenge

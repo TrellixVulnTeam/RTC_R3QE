@@ -18,7 +18,7 @@ import requests
 from setuptools import find_packages
 from tqdm import tqdm
 
-from .s3 import wheel_storage
+from .s3 import S3
 from .utils import (conflicts_with_a_neighbouring_module,
                     contains_python_files_or_subdirs, copytree,
                     get_venv_from_python_version, pprint)
@@ -55,14 +55,9 @@ runtime = 'python3.7'
 fn_version = "".join([d for d in runtime if d in digits])
 
 
-# manylinux_wheel_file_suffix = (
-#     f"cp{fn_version}mu-manylinux1_x86_64.whl"
-# )
-
-# manylinux_wheel_file_suffix = (
-
-
 class Archive:
+    wheel_storage = S3('lambda-wheels-3-7')
+
 
     def copy_editable_packages(self, egg_links, temp_package_path):
         """ """
@@ -207,7 +202,7 @@ class Archive:
         #     package_name, package_version
         # )
 
-        wheels = list(wheel_storage.list_s3_tree())
+        wheels = list(self.wheel_storage.list_tree())
         wheel_files = [f for f in wheels
                        if ((package_version == f.split('-')[1])
                            and (package_name == f.split('-')[0].lower(
@@ -291,7 +286,7 @@ class Archive:
         #     package_name, package_version, manylinux_wheel_file_suffix
         # )
 
-        wheels = list(wheel_storage.list_s3_tree())
+        wheels = list(self.wheel_storage.list_tree())
         # pprint(wheels)
         # print(package_name.lower(), package_version)
         wheel_files = [f for f in wheels
@@ -337,7 +332,6 @@ class Archive:
     def get_cached_manylinux_wheel(
             self, package_name, package_version,
             disable_progress,
-            wheels_bucket='lambda-python-3-7-wheels',
     ):
         """
         Gets the locally stored version of a manylinux wheel.
@@ -347,7 +341,7 @@ class Archive:
         if not op.isdir(cached_wheels_dir):
             makedirs(cached_wheels_dir)
 
-        wheels = list(wheel_storage.list_s3_tree())
+        wheels = list(self.wheel_storage.list_tree())
         wheel_files = [f for f in wheels
                        if ((package_version == f.split('-')[1])
                            and (package_name == f.split('-')[0].lower(
@@ -364,15 +358,15 @@ class Archive:
         wheel_path = op.join(cached_wheels_dir, wheel_file)
 
         if not op.exists(wheel_path):
-            # pprint(list(wheel_storage.list_s3_tree()))
-            if wheel_file in list(wheel_storage.list_s3_tree()):
+            # pprint(list(self.wheel_storage.list_tree()))
+            if wheel_file in list(self.wheel_storage.list_tree()):
                 print(
-                    "Downloading:   {}=={}".format(package_name,
-                                                   package_version))
-                wheel_storage.get_s3_file(wheel_file, wheel_path,
+                    " - {}=={}: Downloading ".format(package_name,
+                                                     package_version))
+                self.wheel_storage.get_file(wheel_file, wheel_path,
                                           disable_progress)
         else:
-            print("Using local:  {}=={}:".format(
+            print("- {}=={}: Using locally cached manylinux wheel ".format(
                 package_name, package_version))
         print(f'\t==>\t{wheel_file}')
         return wheel_path
@@ -558,185 +552,178 @@ class Archive:
             # print("Installed packages:")
             # pprint(installed_packages)
 
-            # try:
-            for (
-                    installed_package_name,
-                    installed_package_version,
-            ) in sorted(installed_packages.items()):
-                if self.have_correct_lambda_package_version(
-                        installed_package_name, installed_package_version
-                ):
-                    # print(
-                    #     f"Have correct version -  {installed_package_name}")
-                    print(
-                        f" - {installed_package_name}=="
-                        f"{installed_package_version}: Using locally cached "
-                        f"manylinux wheel ")
+            try:
+                for (
+                        installed_package_name,
+                        installed_package_version,
+                ) in sorted(installed_packages.items()):
+                    if self.have_correct_lambda_package_version(
+                            installed_package_name, installed_package_version
+                    ):
+                        # print(
+                        #     f"Have correct version -  {
+                        #     installed_package_name}")
+                        print(
+                            f" - {installed_package_name}=="
+                            f"{installed_package_version}: Using locally "
+                            f"cached "
+                            f"manylinux wheel ")
 
-                    self.copy_lambda_wheel(
-                        installed_package_name,
-                        installed_package_version,
-                        temp_project_path
-                    )
-                else:
-                    cached_wheel_path = self.get_cached_manylinux_wheel(
-                        installed_package_name,
-                        installed_package_version,
-                        disable_progress,
-                        wheels_bucket,
-                    )
-                    if cached_wheel_path:
-                        # Otherwise try to use manylinux packages from
-                        # PyPi..
-                        # Related:
-                        # https://github.com/Miserlou/Zappa/issues/398
-                        rmtree(
-                            op.join(temp_project_path,
-                                    installed_package_name),
-                            ignore_errors=True,
+                        self.copy_lambda_wheel(
+                            installed_package_name,
+                            installed_package_version,
+                            temp_project_path
                         )
-                        # with zipfile.ZipFile(cached_wheel_path) as zfile:
-                        #     zfile.extractall(temp_project_path)
-
-            # This is a special case!
-            # SQLite3 is part of the _system_ Python, not a package.
-            # Still, it lives in `lambda-packages`.
-            # Everybody on Python3 gets it!
-            # if self.runtime in ("python3.6", "python3.7"):
-            #     print(" - sqlite==python3: Using precompiled lambda
-            #     package")
-            #     self.extract_lambda_package("sqlite3", temp_project_path)
-
-        # except Exception as e:
-        #     print(f'Error:  {e}')
-        #     print('Cleaning up...')
-        #     for p in [temp_project_path, temp_package_path]:
-        #         rmtree(p)
-        #     if op.isdir(venv) and slim_handler:
-        #         # Remove the temporary handler venv folder
-        #         rmtree(venv)
-        #     # XXX - What should we do here?
+                    else:
+                        cached_wheel_path = self.get_cached_manylinux_wheel(
+                            installed_package_name,
+                            installed_package_version,
+                            disable_progress,
+                            wheels_bucket,
+                        )
+                        if cached_wheel_path:
+                            # Otherwise try to use manylinux packages from
+                            # PyPi..
+                            # Related:
+                            # https://github.com/Miserlou/Zappa/issues/398
+                            rmtree(
+                                op.join(temp_project_path,
+                                        installed_package_name),
+                                ignore_errors=True,
+                            )
+                            # with zipfile.ZipFile(cached_wheel_path) as zfile:
+                            #     zfile.extractall(temp_project_path)
+            except Exception as err:
+                print(f'Error:  {err}')
+                print('Cleaning up...')
+                for p in [temp_project_path, temp_package_path]:
+                    rmtree(p)
+                if op.isdir(venv) and slim_handler:
+                    # Remove the temporary handler venv folder
+                    rmtree(venv)
+                raise err
+                # XXX - What should we do here?
 
         # Then archive it all up..
-        # try:
-        if archive_format == "zip":
-            print("Packaging project as zip.")
+        try:
+            if archive_format == "zip":
+                print("Packaging project as zip.")
 
-            try:
-                compression_method = zipfile.ZIP_DEFLATED
-            except ImportError:  # pragma: no cover
-                compression_method = zipfile.ZIP_STORED
-            archivef = zipfile.ZipFile(archive_path, "w",
-                                       compression_method)
+                try:
+                    compression_method = zipfile.ZIP_DEFLATED
+                except ImportError:  # pragma: no cover
+                    compression_method = zipfile.ZIP_STORED
+                archivef = zipfile.ZipFile(archive_path, "w",
+                                           compression_method)
 
-        elif archive_format == "tarball":
-            print("Packaging project as gzipped tarball.")
-            archivef = tarfile.open(archive_path, "w|gz")
+            elif archive_format == "tarball":
+                print("Packaging project as gzipped tarball.")
+                archivef = tarfile.open(archive_path, "w|gz")
 
-        for root, dirs, files in walk(temp_project_path):
-            for filename in files:
+            for root, dirs, files in walk(temp_project_path):
+                for filename in files:
 
-                # Skip .pyc files for Django migrations
-                # https://github.com/Miserlou/Zappa/issues/436
-                # https://github.com/Miserlou/Zappa/issues/464
-                if filename[-4:] == ".pyc" and root[-10:] == "migrations":
-                    continue
+                    # Skip .pyc files for Django migrations
+                    # https://github.com/Miserlou/Zappa/issues/436
+                    # https://github.com/Miserlou/Zappa/issues/464
+                    if filename[-4:] == ".pyc" and root[-10:] == "migrations":
+                        continue
 
-                # If there is a .pyc file in this package,
-                # we can skip the python source code as we'll just
-                # use the compiled bytecode anyway..
-                if filename[-3:] == ".py" and root[-10:] != "migrations":
-                    abs_filname = op.join(root, filename)
-                    abs_pyc_filename = abs_filname + "c"
-                    if op.isfile(abs_pyc_filename):
+                    # If there is a .pyc file in this package,
+                    # we can skip the python source code as we'll just
+                    # use the compiled bytecode anyway..
+                    if filename[-3:] == ".py" and root[-10:] != "migrations":
+                        abs_filname = op.join(root, filename)
+                        abs_pyc_filename = abs_filname + "c"
+                        if op.isfile(abs_pyc_filename):
 
-                        # but only if the pyc is older than the py,
-                        # otherwise we'll deploy outdated code!
-                        py_time = stat(abs_filname).st_mtime
-                        pyc_time = stat(abs_pyc_filename).st_mtime
+                            # but only if the pyc is older than the py,
+                            # otherwise we'll deploy outdated code!
+                            py_time = stat(abs_filname).st_mtime
+                            pyc_time = stat(abs_pyc_filename).st_mtime
 
-                        if pyc_time > py_time:
-                            continue
+                            if pyc_time > py_time:
+                                continue
 
-                # Make sure that the files are all correctly chmodded
-                # Related: https://github.com/Miserlou/Zappa/issues/484
-                # Related: https://github.com/Miserlou/Zappa/issues/682
-                chmod(op.join(root, filename), 0o755)
+                    # Make sure that the files are all correctly chmodded
+                    # Related: https://github.com/Miserlou/Zappa/issues/484
+                    # Related: https://github.com/Miserlou/Zappa/issues/682
+                    chmod(op.join(root, filename), 0o755)
 
-                if archive_format == "zip":
-                    # Actually put the file into the proper place in the zip
-                    # Related: https://github.com/Miserlou/Zappa/pull/716
-                    zipi = zipfile.ZipInfo(
-                        op.join(
-                            root.replace(temp_project_path, "").lstrip(
-                                sep),
-                            filename
-                        )
-                    )
-                    zipi.create_system = 3
-                    zipi.external_attr = 0o755 << int(
-                        16)  # Is this P2/P3 functional?
-                    with open(op.join(root, filename), "rb") as f:
-                        archivef.writestr(zipi, f.read(),
-                                          compression_method)
-                elif archive_format == "tarball":
-                    tarinfo = tarfile.TarInfo(
-                        op.join(
-                            root.replace(temp_project_path, "").lstrip(
-                                sep),
-                            filename
-                        )
-                    )
-                    tarinfo.mode = 0o755
-
-                    stat = stat(op.join(root, filename))
-                    tarinfo.mtime = stat.st_mtime
-                    tarinfo.size = stat.st_size
-                    with open(op.join(root, filename), "rb") as f:
-                        archivef.addfile(tarinfo, f)
-
-            # Create python init file if it does not exist
-            # Only do that if there are sub folders or python files and
-            # does not
-            # conflict with a neighbouring module
-            # Related: https://github.com/Miserlou/Zappa/issues/766
-            if not contains_python_files_or_subdirs(root):
-                # if the directory does not contain any .py file at any
-                # level,
-                # we can skip the rest
-                dirs[:] = [d for d in dirs if d != root]
-            else:
-                if (
-                        "__init__.py" not in files
-                        and not conflicts_with_a_neighbouring_module(root)
-                ):
-                    tmp_init = op.join(temp_project_path,
-                                       "__init__.py")
-                    open(tmp_init, "a").close()
-                    chmod(tmp_init, 0o755)
-
-                    arcname = op.join(
-                        root.replace(temp_project_path, ""),
-                        op.join(
-                            root.replace(temp_project_path, ""),
-                            "__init__.py"
-                        ),
-                    )
                     if archive_format == "zip":
-                        archivef.write(tmp_init, arcname)
+                        # Actually put the file into the proper place in the zip
+                        # Related: https://github.com/Miserlou/Zappa/pull/716
+                        zipi = zipfile.ZipInfo(
+                            op.join(
+                                root.replace(temp_project_path, "").lstrip(
+                                    sep),
+                                filename
+                            )
+                        )
+                        zipi.create_system = 3
+                        zipi.external_attr = 0o755 << int(
+                            16)  # Is this P2/P3 functional?
+                        with open(op.join(root, filename), "rb") as f:
+                            archivef.writestr(zipi, f.read(),
+                                              compression_method)
                     elif archive_format == "tarball":
-                        archivef.add(tmp_init, arcname)
+                        tarinfo = tarfile.TarInfo(
+                            op.join(
+                                root.replace(temp_project_path, "").lstrip(
+                                    sep),
+                                filename
+                            )
+                        )
+                        tarinfo.mode = 0o755
 
-        # except Exception as e:
-        #     print(e)
-        # finally:
-        archivef.close()
-        print('Cleaning up...')
-        # Trash the temp directory
-        rmtree(temp_project_path)
-        rmtree(temp_package_path)
-        if op.isdir(venv) and slim_handler:
-            # Remove the temporary handler venv folder
-            rmtree(venv)
+                        stat = stat(op.join(root, filename))
+                        tarinfo.mtime = stat.st_mtime
+                        tarinfo.size = stat.st_size
+                        with open(op.join(root, filename), "rb") as f:
+                            archivef.addfile(tarinfo, f)
+
+                # Create python init file if it does not exist
+                # Only do that if there are sub folders or python files and
+                # does not
+                # conflict with a neighbouring module
+                # Related: https://github.com/Miserlou/Zappa/issues/766
+                if not contains_python_files_or_subdirs(root):
+                    # if the directory does not contain any .py file at any
+                    # level,
+                    # we can skip the rest
+                    dirs[:] = [d for d in dirs if d != root]
+                else:
+                    if (
+                            "__init__.py" not in files
+                            and not conflicts_with_a_neighbouring_module(root)
+                    ):
+                        tmp_init = op.join(temp_project_path,
+                                           "__init__.py")
+                        open(tmp_init, "a").close()
+                        chmod(tmp_init, 0o755)
+
+                        arcname = op.join(
+                            root.replace(temp_project_path, ""),
+                            op.join(
+                                root.replace(temp_project_path, ""),
+                                "__init__.py"
+                            ),
+                        )
+                        if archive_format == "zip":
+                            archivef.write(tmp_init, arcname)
+                        elif archive_format == "tarball":
+                            archivef.add(tmp_init, arcname)
+
+        except Exception as err:
+            print(f'Error:  {err}')
+        finally:
+            archivef.close()
+            print('Cleaning up...')
+            # Trash the temp directory
+            rmtree(temp_project_path)
+            rmtree(temp_package_path)
+            if op.isdir(venv) and slim_handler:
+                # Remove the temporary handler venv folder
+                rmtree(venv)
 
         return archive_fname

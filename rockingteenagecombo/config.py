@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from typing import Dict
+from typing import Any
 
 from boto3 import Session
 from botocore.config import Config
@@ -177,8 +177,8 @@ class ZappaConfig(object):
     desired_role_name: str = None
     desired_role_arn: str = None
     runtime: str = "python3.7"  # Detected at runtime in CLI
-    tags: Dict = None
-    endpoint_urls: Dict = None
+    tags: Any = ()
+    endpoint_urls: Any = None
     xray_tracing: bool = False
 
     http_methods = ["ANY"]

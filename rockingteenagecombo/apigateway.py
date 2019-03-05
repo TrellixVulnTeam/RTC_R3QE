@@ -1,10 +1,11 @@
 from dataclasses import dataclass
+from json import loads
 from logging import getLogger
 from time import time
 
 from boto3 import client
 from botocore.exceptions import ClientError
-from troposphere import Parameter, Ref, Template, apigateway as apigw
+from troposphere import GetAtt, Parameter, Ref, Template, apigateway as apigw
 
 from .iam import IAM
 from .logs import Logs
@@ -546,7 +547,7 @@ class ApiGateway(IAM, Logs):
             domainName=domain_name
         )
         found = False
-        for base_path_mapping in base_path_mappings["items"]:
+        for base_path_mapping in base_path_mappings.get('items', []):
             if (
                     base_path_mapping["restApiId"] == api_id
                     and base_path_mapping["stage"] == stage
@@ -614,3 +615,175 @@ class ApiGateway(IAM, Logs):
             return {x["OutputKey"]: x["OutputValue"] for x in stack["Outputs"]}
         except ClientError:
             return {}
+
+    def create_authorizer(self, restapi, uri, authorizer):
+        authorizer_type = authorizer.get("type", "TOKEN").upper()
+        identity_validation_expression = authorizer.get("validation_expression",
+                                                        None)
+
+        authorizer_resource = apigw.Authorizer("Authorizer")
+        authorizer_resource.RestApiId = Ref(restapi)
+        authorizer_resource.Name = authorizer.get("name", "ZappaAuthorizer")
+        authorizer_resource.Type = authorizer_type
+        authorizer_resource.AuthorizerUri = uri
+        authorizer_resource.IdentitySource = (
+                "method.request.header.%s" % authorizer.get("token_header",
+                                                            "Authorization")
+        )
+        if identity_validation_expression:
+            authorizer_resource.IdentityValidationExpression = (
+                identity_validation_expression
+            )
+
+        if authorizer_type == "TOKEN":
+            if not self.credentials_arn:
+                self.get_credentials_arn()
+            authorizer_resource.AuthorizerResultTtlInSeconds = authorizer.get(
+                "result_ttl", 300
+            )
+            authorizer_resource.AuthorizerCredentials = self.credentials_arn
+        if authorizer_type == "COGNITO_USER_POOLS":
+            authorizer_resource.ProviderARNs = authorizer.get("provider_arns")
+
+        self.cloudformation_api_resources.append(authorizer_resource.title)
+        self.cloudformation_template.add_resource(authorizer_resource)
+
+        return authorizer_resource
+
+    def create_api_gateway_routes(
+            self,
+            lambda_arn,
+            api_name=None,
+            api_key_required=False,
+            authorization_type="NONE",
+            authorizer=None,
+            cors_options=None,
+            description=None,
+    ):
+
+        restapi = apigw.RestApi("Api")
+        restapi.Name = api_name or lambda_arn.split(":")[-1]
+        if not description:
+            description = "Created automatically by Zappa."
+        restapi.Description = description
+        # if self.boto_session.region_name == "us-gov-west-1":
+        #     endpoint = apigw.EndpointConfiguration()
+        #     endpoint.Types = ["REGIONAL"]
+        #     restapi.EndpointConfiguration = endpoint
+        if self.apigateway_policy:
+            restapi.Policy = loads(self.apigateway_policy)
+        self.cloudformation_template.add_resource(restapi)
+
+        root_id = GetAtt(restapi, "RootResourceId")
+        # invocation_prefix = (
+        #     "aws" if self.boto_session.region_name != "us-gov-west-1" else
+        #     "aws-us-gov"
+        # )
+        invocation_prefix = "aws"
+        invocations_uri = (
+                "arn:"
+                + invocation_prefix
+                + ":apigw:"
+                + self.aws_region
+                + ":lambda:path/2015-03-31/functions/"
+                + lambda_arn
+                + "/invocations"
+        )
+
+        authorizer_resource = None
+        # if authorizer:
+        #     authorizer_lambda_arn = authorizer.get("arn", lambda_arn)
+        #     lambda_uri = (f"arn:{invocation_prefix}:apigw:"
+        #                   f"{
+        #                   self.boto_session.region_name}:lambda:path/2015-03"
+        #                   f"-31/functions/{authorizer_lambda_arn}/invocations"
+        #                   )
+        #     authorizer_resource = self.create_authorizer(
+        #         restapi, lambda_uri, authorizer
+        #     )
+
+        self.create_and_setup_methods(
+            restapi,
+            root_id,
+            api_key_required,
+            invocations_uri,
+            authorization_type,
+            authorizer_resource,
+            0,
+        )
+
+        if cors_options:
+            self.create_and_setup_cors(
+                restapi, root_id, invocations_uri, 0, cors_options
+            )
+
+        resource = apigw.Resource("ResourceAnyPathSlashed")
+        self.cloudformation_api_resources.append(resource.title)
+        resource.RestApiId = Ref(restapi)
+        resource.ParentId = root_id
+        resource.PathPart = "{proxy+}"
+        self.cloudformation_template.add_resource(resource)
+
+        self.create_and_setup_methods(
+            restapi,
+            resource,
+            api_key_required,
+            invocations_uri,
+            authorization_type,
+            authorizer_resource,
+            1,
+        )  # pragma: no cover
+
+        if cors_options:
+            self.create_and_setup_cors(
+                restapi, resource, invocations_uri, 1, cors_options
+            )  # pragma: no cover
+        return restapi
+
+    def create_stack_template(
+            self,
+            lambda_arn,
+            lambda_name,
+            api_key_required,
+            iam_authorization,
+            authorizer,
+            cors_options=None,
+            description=None,
+            # policy=None,
+    ):
+        """
+        Build the entire CF stack.
+        Just used for the API Gateway, but could be expanded in the future.
+        """
+
+        auth_type = "NONE"
+        if iam_authorization and authorizer:
+            logger.warning(
+                "Both IAM Authorization and Authorizer are specified, this is "
+                "not possible. "
+                "Setting Auth method to IAM Authorization"
+            )
+            authorizer = None
+            auth_type = "AWS_IAM"
+        elif iam_authorization:
+            auth_type = "AWS_IAM"
+        elif authorizer:
+            auth_type = authorizer.get("type", "CUSTOM")
+
+        # build a fresh template
+        self.cloudformation_template = Template()
+        self.cloudformation_template.set_description(
+            "Automatically generated with Zappa")
+        self.cloudformation_api_resources = []
+        self.cloudformation_parameters = {}
+
+        restapi = self.create_api_gateway_routes(
+            lambda_arn,
+            api_name=lambda_name,
+            api_key_required=api_key_required,
+            authorization_type=auth_type,
+            authorizer=authorizer,
+            cors_options=cors_options,
+            description=description,
+        )
+        return self.cloudformation_template

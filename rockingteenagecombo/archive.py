@@ -6,6 +6,7 @@ import tarfile
 import tempfile
 import time
 import zipfile
+from contextlib import suppress
 from distutils.dir_util import copy_tree
 from glob import glob
 from os import (chmod, environ, getcwd, listdir, makedirs, path as op, remove,
@@ -279,6 +280,8 @@ class Archive:
         # print(package_name, package_version)
 
         cached_wheels_dir = op.join(tempfile.gettempdir(), "cached_wheels")
+        with suppress(FileExistsError):
+            makedirs(cached_wheels_dir)
         # print(cached_wheels_dir)
         # print(listdir(cached_wheels_dir))
 
@@ -364,7 +367,7 @@ class Archive:
                     " - {}=={}: Downloading ".format(package_name,
                                                      package_version))
                 self.wheel_storage.get_file(wheel_file, wheel_path,
-                                          disable_progress)
+                                            disable_progress=True)
         else:
             print("- {}=={}: Using locally cached manylinux wheel ".format(
                 package_name, package_version))
@@ -579,7 +582,6 @@ class Archive:
                             installed_package_name,
                             installed_package_version,
                             disable_progress,
-                            wheels_bucket,
                         )
                         if cached_wheel_path:
                             # Otherwise try to use manylinux packages from

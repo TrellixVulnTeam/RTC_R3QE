@@ -84,7 +84,7 @@ def human_size(num, suffix="B"):
     """
     Convert bytes length to a human-readable version
     """
-    for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
+    for unit in ('', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi'):
         if abs(num) < 1024.0:
             return "{0:3.1f}{1!s}{2!s}".format(num, unit, suffix)
         num /= 1024.0
@@ -157,7 +157,7 @@ def detect_flask_apps():
 
 
 def get_venv_from_python_version():
-    return "python" + str(sys.version_info[0]) + "." + str(sys.version_info[1])
+    return 'python{}.{}'.format(*sys.version_info)
 
 
 def get_runtime_from_python_version():
@@ -201,10 +201,7 @@ def check_new_version_available(this_version):
     resp = requests.get(pypi_url, timeout=1.5)
     top_version = resp.json()["info"]["version"]
 
-    if this_version != top_version:
-        return True
-    else:
-        return False
+    return this_version != top_version
 
 
 class InvalidAwsLambdaName(Exception):
@@ -551,11 +548,8 @@ def add_event_source(
     if not dry:
         if not event_source_obj.status(funk):
             event_source_obj.add(funk)
-            if event_source_obj.status(funk):
-                return "successful"
-            else:
-                return "failed"
-        else:
+            return 'successful' if event_source_obj.status(funk) else 'failed'
+    else:
             return "exists"
 
     return "dryrun"

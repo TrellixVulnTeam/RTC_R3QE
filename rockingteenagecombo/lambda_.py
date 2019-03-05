@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from json import loads
 from logging import getLogger
 from os import remove
 from random import choice
@@ -10,12 +9,15 @@ from boto3 import client
 from botocore.exceptions import ClientError
 from requests import get
 from tqdm import tqdm
-from troposphere import GetAtt, Ref, Template, apigateway as apigw
 
 from .apigateway import ApiGateway
 from .s3 import S3
+from .utils import ppformat, pprint
 
 logger = getLogger(__name__)
+
+for p in [pprint, ppformat]:
+    pass
 
 
 @dataclass
@@ -416,283 +418,7 @@ class Lambda(ApiGateway):
         if result["ResponseMetadata"]["HTTPStatusCode"] != 201:
             print("Cognito:  Failed to update lambda permission", result)
 
-    def create_and_setup_methods(
-            self,
-            restapi,
-            resource,
-            api_key_required,
-            uri,
-            authorization_type,
-            authorizer_resource,
-            depth
-    ):
-        """
-        Set up the methods, integration responses and method responses for a 
-        given API Gateway resource.
-        """
-        for method_name in self.http_methods:
-            method = apigw.Method(method_name + str(depth))
-            method.RestApiId = Ref(restapi)
-            if type(resource) is apigw.Resource:
-                method.ResourceId = Ref(resource)
-            else:
-                method.ResourceId = resource
-            method.HttpMethod = method_name.upper()
-            method.AuthorizationType = authorization_type
-            if authorizer_resource:
-                method.AuthorizerId = Ref(authorizer_resource)
-            method.ApiKeyRequired = api_key_required
-            method.MethodResponses = []
-            self.cf_template.add_resource(method)
-            self.cf_api_resources.append(method.title)
 
-            if not self.credentials_arn:
-                self.get_credentials_arn()
-            credentials = self.credentials_arn  # This must be a Role ARN
-
-            integration = apigw.Integration()
-            integration.CacheKeyParameters = []
-            integration.CacheNamespace = 'none'
-            integration.Credentials = credentials
-            integration.IntegrationHttpMethod = 'POST'
-            integration.IntegrationResponses = []
-            integration.PassthroughBehavior = 'NEVER'
-            integration.Type = 'AWS_PROXY'
-            integration.Uri = uri
-            method.Integration = integration
-
-    def create_and_setup_cors(self, restapi, resource, uri, depth, config):
-        """
-        Set up the methods, integration responses and method responses for a 
-        given API Gateway resource.
-        """
-        if config is True:
-            config = {}
-        method_name = "OPTIONS"
-        method = apigw.Method(method_name + str(depth))
-        method.RestApiId = Ref(restapi)
-        if type(resource) is apigw.Resource:
-            method.ResourceId = Ref(resource)
-        else:
-            method.ResourceId = resource
-        method.HttpMethod = method_name.upper()
-        method.AuthorizationType = "NONE"
-        method_response = apigw.MethodResponse()
-        method_response.ResponseModels = {
-            "application/json": "Empty"
-        }
-        response_headers = {
-            "Access-Control-Allow-Headers": "'%s'" % ",".join(config.get(
-                "allowed_headers", ["Content-Type", "X-Amz-Date",
-                                    "Authorization", "X-Api-Key",
-                                    "X-Amz-Security-Token"])),
-            "Access-Control-Allow-Methods": "'%s'" % ",".join(config.get(
-                "allowed_methods",
-                ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"])),
-            "Access-Control-Allow-Origin": "'%s'" % config.get(
-                "allowed_origin", "*")
-        }
-        method_response.ResponseParameters = {
-            "method.response.header.%s" % key: True for key in response_headers
-        }
-        method_response.StatusCode = "200"
-        method.MethodResponses = [
-            method_response
-        ]
-        self.cf_template.add_resource(method)
-        self.cf_api_resources.append(method.title)
-
-        integration = apigw.Integration()
-        integration.Type = 'MOCK'
-        integration.PassthroughBehavior = 'NEVER'
-        integration.RequestTemplates = {
-            "application/json": "{\"statusCode\": 200}"
-        }
-        integration_response = apigw.IntegrationResponse()
-        integration_response.ResponseParameters = {
-            "method.response.header.%s" % key: value for key, value in
-            response_headers.items()
-        }
-        integration_response.ResponseTemplates = {
-            "application/json": ""
-        }
-        integration_response.StatusCode = "200"
-        integration.IntegrationResponses = [
-            integration_response
-        ]
-
-        integration.Uri = uri
-        method.Integration = integration
-
-    def create_authorizer(self, restapi, uri, authorizer):
-        authorizer_type = authorizer.get("type", "TOKEN").upper()
-        identity_validation_expression = authorizer.get("validation_expression",
-                                                        None)
-
-        authorizer_resource = apigw.Authorizer("Authorizer")
-        authorizer_resource.RestApiId = Ref(restapi)
-        authorizer_resource.Name = authorizer.get("name", "ZappaAuthorizer")
-        authorizer_resource.Type = authorizer_type
-        authorizer_resource.AuthorizerUri = uri
-        authorizer_resource.IdentitySource = (
-                "method.request.header.%s" % authorizer.get("token_header",
-                                                            "Authorization")
-        )
-        if identity_validation_expression:
-            authorizer_resource.IdentityValidationExpression = (
-                identity_validation_expression
-            )
-
-        if authorizer_type == "TOKEN":
-            if not self.credentials_arn:
-                self.get_credentials_arn()
-            authorizer_resource.AuthorizerResultTtlInSeconds = authorizer.get(
-                "result_ttl", 300
-            )
-            authorizer_resource.AuthorizerCredentials = self.credentials_arn
-        if authorizer_type == "COGNITO_USER_POOLS":
-            authorizer_resource.ProviderARNs = authorizer.get("provider_arns")
-
-        self.cloudformation_api_resources.append(authorizer_resource.title)
-        self.cloudformation_template.add_resource(authorizer_resource)
-
-        return authorizer_resource
-
-    def create_api_gateway_routes(
-            self,
-            lambda_arn,
-            api_name=None,
-            api_key_required=False,
-            authorization_type="NONE",
-            authorizer=None,
-            cors_options=None,
-            description=None,
-    ):
-
-        restapi = apigw.RestApi("Api")
-        restapi.Name = api_name or lambda_arn.split(":")[-1]
-        if not description:
-            description = "Created automatically by Zappa."
-        restapi.Description = description
-        # if self.boto_session.region_name == "us-gov-west-1":
-        #     endpoint = apigw.EndpointConfiguration()
-        #     endpoint.Types = ["REGIONAL"]
-        #     restapi.EndpointConfiguration = endpoint
-        if self.apigateway_policy:
-            restapi.Policy = loads(self.apigateway_policy)
-        self.cloudformation_template.add_resource(restapi)
-
-        root_id = GetAtt(restapi, "RootResourceId")
-        # invocation_prefix = (
-        #     "aws" if self.boto_session.region_name != "us-gov-west-1" else
-        #     "aws-us-gov"
-        # )
-        invocation_prefix = "aws"
-        invocations_uri = (
-                "arn:"
-                + invocation_prefix
-                + ":apigw:"
-                + self.aws_region
-                + ":lambda:path/2015-03-31/functions/"
-                + lambda_arn
-                + "/invocations"
-        )
-
-        authorizer_resource = None
-        # if authorizer:
-        #     authorizer_lambda_arn = authorizer.get("arn", lambda_arn)
-        #     lambda_uri = (f"arn:{invocation_prefix}:apigw:"
-        #                   f"{
-        #                   self.boto_session.region_name}:lambda:path/2015-03"
-        #                   f"-31/functions/{authorizer_lambda_arn}/invocations"
-        #                   )
-        #     authorizer_resource = self.create_authorizer(
-        #         restapi, lambda_uri, authorizer
-        #     )
-
-        self.create_and_setup_methods(
-            restapi,
-            root_id,
-            api_key_required,
-            invocations_uri,
-            authorization_type,
-            authorizer_resource,
-            0,
-        )
-
-        if cors_options:
-            self.create_and_setup_cors(
-                restapi, root_id, invocations_uri, 0, cors_options
-            )
-
-        resource = apigw.Resource("ResourceAnyPathSlashed")
-        self.cloudformation_api_resources.append(resource.title)
-        resource.RestApiId = Ref(restapi)
-        resource.ParentId = root_id
-        resource.PathPart = "{proxy+}"
-        self.cloudformation_template.add_resource(resource)
-
-        self.create_and_setup_methods(
-            restapi,
-            resource,
-            api_key_required,
-            invocations_uri,
-            authorization_type,
-            authorizer_resource,
-            1,
-        )  # pragma: no cover
-
-        if cors_options:
-            self.create_and_setup_cors(
-                restapi, resource, invocations_uri, 1, cors_options
-            )  # pragma: no cover
-        return restapi
-
-    def create_stack_template(
-            self,
-            lambda_arn,
-            lambda_name,
-            api_key_required,
-            iam_authorization,
-            authorizer,
-            cors_options=None,
-            description=None,
-    ):
-        """
-        Build the entire CF stack.
-        Just used for the API Gateway, but could be expanded in the future.
-        """
-
-        auth_type = "NONE"
-        if iam_authorization and authorizer:
-            logger.warning(
-                "Both IAM Authorization and Authorizer are specified, this is "
-                "not possible. "
-                "Setting Auth method to IAM Authorization"
-            )
-            authorizer = None
-            auth_type = "AWS_IAM"
-        elif iam_authorization:
-            auth_type = "AWS_IAM"
-        elif authorizer:
-            auth_type = authorizer.get("type", "CUSTOM")
-
-        # build a fresh template
-        self.cf_template = Template()
-        self.cf_template.set_description("Automatically generated with Zappa")
-        self.cf_api_resources = []
-        self.cf_parameters = {}
-
-        restapi = self.create_api_gateway_routes(
-            lambda_arn,
-            api_name=lambda_name,
-            api_key_required=api_key_required,
-            authorization_type=auth_type,
-            authorizer=authorizer,
-            cors_options=cors_options,
-            description=description,
-        )
-        return self.cf_template
 
     def update_stack(
             self,
@@ -706,13 +432,12 @@ class Lambda(ApiGateway):
         Update or create the CF stack managed by Zappa.
         """
         capabilities = []
-
         template = name + "-template-" + str(int(time())) + ".json"
         with open(template, "wb") as out:
             out.write(
                 bytes(
-                    self.cf_template.to_json(indent=None,
-                                             separators=(",", ":")),
+                    self.cloudformation_template.to_json(indent=None,
+                                                         separators=(",", ":")),
                     "utf-8",
                 )
             )
@@ -725,7 +450,7 @@ class Lambda(ApiGateway):
         #     )
         # else:
         url = "https://s3.amazonaws.com/{0}/{1}".format(working_bucket,
-                                                            template)
+                                                        template)
 
         tags = [
             {"Key": key, "Value": self.tags[key]}
@@ -771,7 +496,7 @@ class Lambda(ApiGateway):
                     raise
 
         if wait:
-            total_resources = len(self.cf_template.resources)
+            total_resources = len(self.cloudformation_template.resources)
             current_resources = 0
             sr = self.cloudformation.get_paginator("list_stack_resources")
             progress = tqdm(total=total_resources, unit="res",
@@ -789,7 +514,9 @@ class Lambda(ApiGateway):
                     break
 
                 # Something has gone wrong.
-                # Is raising enough? Should we also remove the Lambda function?
+                # Is raising enough? Should we also remove) the Lambda function?
+                print(result["Stacks"][0]["StackStatus"])
+
                 if result["Stacks"][0]["StackStatus"] in [
                     "DELETE_COMPLETE",
                     "DELETE_IN_PROGRESS",

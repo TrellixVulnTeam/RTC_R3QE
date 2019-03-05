@@ -10,11 +10,11 @@ import re
 import string
 import sys
 import tempfile
-import time
 import zipfile
 from builtins import bytes, input
 from datetime import datetime, timedelta
 from os import path as op
+from time import mktime, sleep, time
 
 import argcomplete
 import click
@@ -711,7 +711,7 @@ class ZappaCLI(object):
         if not output:
             template_file = (
                     self.lambda_name + "-template-" + str(
-                int(time.time())) + ".json"
+                int(time())) + ".json"
             )
         else:
             template_file = output
@@ -958,7 +958,7 @@ class ZappaCLI(object):
                 )
                 conf = function_response["Configuration"]
                 last_updated = parser.parse(conf["LastModified"])
-                last_updated_unix = time.mktime(last_updated.timetuple())
+                last_updated_unix = mktime(last_updated.timetuple())
             except BotoCoreError as e:
                 click.echo(
                     click.style(type(e).__name__, fg="red") + ": " + e.args[0])
@@ -1252,7 +1252,7 @@ class ZappaCLI(object):
                     break
                 if new_logs:
                     last_since = new_logs[-1]["timestamp"]
-                time.sleep(1)
+                sleep(1)
         except KeyboardInterrupt:  # pragma: no cover
             # Die gracefully
             try:

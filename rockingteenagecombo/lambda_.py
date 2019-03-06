@@ -515,7 +515,6 @@ class Lambda(ApiGateway):
 
                 # Something has gone wrong.
                 # Is raising enough? Should we also remove) the Lambda function?
-                print(result["Stacks"][0]["StackStatus"])
 
                 if result["Stacks"][0]["StackStatus"] in [
                     "DELETE_COMPLETE",

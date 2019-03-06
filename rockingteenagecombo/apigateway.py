@@ -683,7 +683,7 @@ class ApiGateway(IAM, Logs):
         invocations_uri = (
                 "arn:"
                 + invocation_prefix
-                + ":apigw:"
+                + ":apigateway:"
                 + self.aws_region
                 + ":lambda:path/2015-03-31/functions/"
                 + lambda_arn
@@ -693,7 +693,7 @@ class ApiGateway(IAM, Logs):
         authorizer_resource = None
         # if authorizer:
         #     authorizer_lambda_arn = authorizer.get("arn", lambda_arn)
-        #     lambda_uri = (f"arn:{invocation_prefix}:apigw:"
+        #     lambda_uri = (f"arn:{invocation_prefix}:apigateway:"
         #                   f"{
         #                   self.boto_session.region_name}:lambda:path/2015-03"
         #                   f"-31/functions/{authorizer_lambda_arn}/invocations"
@@ -786,4 +786,5 @@ class ApiGateway(IAM, Logs):
             cors_options=cors_options,
             description=description,
         )
+
         return self.cloudformation_template

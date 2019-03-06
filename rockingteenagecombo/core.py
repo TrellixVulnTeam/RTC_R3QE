@@ -6,6 +6,7 @@ from string import digits
 
 from boto3 import resource
 
+from .archive import Archive
 from .config import logger
 from .dynamodb import DynamoDB
 from .events import Events
@@ -18,7 +19,7 @@ for p in [pprint, ppformat]:
 
 
 @dataclass
-class Zappa(Events, DynamoDB, SNS, Route53):
+class Zappa(Events, DynamoDB, SNS, Route53, Archive):
 
     def __post_init__(self):
         self.cloudwatch = resource('cloudwatch')

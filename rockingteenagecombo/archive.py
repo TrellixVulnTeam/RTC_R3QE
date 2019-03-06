@@ -7,12 +7,12 @@ import tempfile
 import time
 import zipfile
 from contextlib import suppress
+from dataclasses import dataclass
 from distutils.dir_util import copy_tree
 from glob import glob
 from os import (chmod, environ, getcwd, listdir, makedirs, path as op, remove,
                 rmdir, sep, walk)
 from shutil import copy, rmtree
-from string import digits
 from uuid import uuid4
 
 import requests
@@ -47,46 +47,92 @@ ZIP_EXCLUDES = [
     "*/__pycache__/*",
 ]
 
-exclude = [
 
-]
+# runtime = 'python3.7'
 
-runtime = 'python3.7'
+# fn_version = "".join([d for d in runtime if d in digits])
 
-fn_version = "".join([d for d in runtime if d in digits])
-
-
+@dataclass
 class Archive:
     wheel_storage = S3('lambda-wheels-3-7')
 
+    @staticmethod
+    def download_url_with_progress(url, stream, disable_progress):
+        """
+        Downloads a given url in chunks and writes to the provided stream
+        (can be any io stream).
+        Displays the progress bar for the download.
+        """
+        resp = requests.get(url, timeout=2, stream=True)
+        resp.raw.decode_content = True
 
-    def copy_editable_packages(self, egg_links, temp_package_path):
-        """ """
-        for egg_link in egg_links:
-            with open(egg_link, "rb") as df:
-                egg_path = df.read().decode("utf-8").splitlines()[0].strip()
-                pkgs = set(
-                    [
-                        x.split(".")[0]
-                        for x in
-                        find_packages(egg_path, exclude=["test", "tests"])
-                    ]
+        progress = tqdm(
+            unit="B",
+            unit_scale=True,
+            total=int(resp.headers.get("Content-Length", 0)),
+            disable=disable_progress,
+        )
+        for chunk in resp.iter_content(chunk_size=1024):
+            if chunk:
+                progress.update(len(chunk))
+                stream.write(chunk)
+
+        progress.close()
+
+    @staticmethod
+    def get_installed_packages(site_packages, site_packages_64):
+        """
+        Returns a dict of installed packages that Zappa cares about.
+        """
+        import pkg_resources
+
+        package_to_keep = []
+        if op.isdir(site_packages):
+            package_to_keep += listdir(site_packages)
+        if op.isdir(site_packages_64):
+            package_to_keep += listdir(site_packages_64)
+
+        package_to_keep = [x.lower() for x in package_to_keep]
+        # print("Packages to keep:")
+        # pprint(package_to_keep)
+
+        installed_packages = {
+            package.project_name.lower(): package.version
+            for package in pkg_resources.WorkingSet()
+            if package.project_name.lower() in package_to_keep
+               or package.location.lower()
+               in [site_packages.lower(), site_packages_64.lower()]
+        }
+
+        # print('Installed packages:')
+        # pprint(installed_packages)
+
+        return installed_packages
+
+    # staticmethod as per https://github.com/Miserlou/Zappa/issues/780
+    @staticmethod
+    def get_current_venv():
+        if "VIRTUAL_ENV" in environ:
+            venv = environ["VIRTUAL_ENV"]
+        elif op.exists(".python-version"):  # pragma: no cover
+            try:
+                subprocess.check_output(["pyenv", "help"],
+                                        stderr=subprocess.STDOUT)
+            except OSError:
+                print(
+                    "This directory seems to have pyenv's local venv, "
+                    "but pyenv executable was not found."
                 )
-                for pkg in pkgs:
-                    copytree(
-                        op.join(egg_path, pkg),
-                        op.join(temp_package_path, pkg),
-                        excludes=ZIP_EXCLUDES + exclude,
-                        metadata=False,
-                        symlinks=False,
-                    )
-
-        if temp_package_path:
-            # now remove any egg-links as they will cause issues if they
-            # still exist
-            for link in glob(
-                    op.join(temp_package_path, "*.egg-link")):
-                remove(link)
+            with open(".python-version", "r") as f:
+                env_name = f.readline().strip()
+            bin_path = subprocess.check_output(
+                ["pyenv", "which", "python"]).decode(
+                "utf-8"
+            )
+            venv = bin_path[: bin_path.rfind(env_name)] + env_name
+        else:  # pragma: no cover
+            return None
+        return venv
 
     def get_deps_list(self, pkg_name, installed_distros=None):
         import pkg_resources
@@ -146,7 +192,6 @@ class Archive:
         zappa_deps = self.get_deps_list("zappa")
         pkg_list = ["{0!s}=={1!s}".format(dep, version) for dep, version in
                     zappa_deps]
-
         # Need to manually add setuptools
         pkg_list.append("setuptools")
         command = [
@@ -167,172 +212,94 @@ class Archive:
 
         if pip_return_code:
             raise EnvironmentError("Pypi lookup failed")
-
         return ve_path
 
-    # staticmethod as per https://github.com/Miserlou/Zappa/issues/780
-    @staticmethod
-    def get_current_venv():
-        if "VIRTUAL_ENV" in environ:
-            venv = environ["VIRTUAL_ENV"]
-        elif op.exists(".python-version"):  # pragma: no cover
-            try:
-                subprocess.check_output(["pyenv", "help"],
-                                        stderr=subprocess.STDOUT)
-            except OSError:
-                print(
-                    "This directory seems to have pyenv's local venv, "
-                    "but pyenv executable was not found."
+    def copy_editable_packages(self, egg_links, temp_package_path, exclude):
+        """ """
+        for egg_link in egg_links:
+            with open(egg_link, "rb") as df:
+                egg_path = df.read().decode("utf-8").splitlines()[0].strip()
+                pkgs = set(
+                    [
+                        x.split(".")[0]
+                        for x in
+                        find_packages(egg_path, exclude=["test", "tests"])
+                    ]
                 )
-            with open(".python-version", "r") as f:
-                env_name = f.readline().strip()
-            bin_path = subprocess.check_output(
-                ["pyenv", "which", "python"]).decode(
-                "utf-8"
-            )
-            venv = bin_path[: bin_path.rfind(env_name)] + env_name
-        else:  # pragma: no cover
-            return None
-        return venv
+                for pkg in pkgs:
+                    copytree(
+                        op.join(egg_path, pkg),
+                        op.join(temp_package_path, pkg),
+                        excludes=ZIP_EXCLUDES + exclude,
+                        metadata=False,
+                        symlinks=False,
+                    )
 
-    def copy_lambda_wheel(self, package_name, package_version, project_path):
-        package_path = op.join(project_path, package_name)
-        cached_wheels_dir = op.join(tempfile.gettempdir(), "cached_wheels")
-        # print(f'package path {package_path}')
-        # wheel_file = "{0!s}-{1!s}-{2!s}".format(
-        #     package_name, package_version
-        # )
+        if temp_package_path:
+            # now remove any egg-links as they will cause issues if they
+            # still exist
+            for link in glob(
+                    op.join(temp_package_path, "*.egg-link")):
+                remove(link)
 
-        wheels = list(self.wheel_storage.list_tree())
-        wheel_files = [f for f in wheels
-                       if ((package_version == f.split('-')[1])
-                           and (package_name == f.split('-')[0].lower(
-                    ).replace('_', '-')))]
-        try:
-            wheel_file = wheel_files[0]
-        except IndexError:
-            print(f'Could not find wheel for:  '
-                  f'{package_name}=={package_version}')
-            if package_name == 'lambda-packages':
-                return False
-            raise
+    # def have_correct_lambda_package_version(self, package_name,
+    #                                         package_version):
+    #
+    #     cached_wheels_dir = op.join(tempfile.gettempdir(), "cached_wheels")
+    #     with suppress(FileExistsError):
+    #         makedirs(cached_wheels_dir)
+    #
+    #     wheels = list(self.wheel_storage.list_tree())
+    #
+    #     wheel_files = [f for f in wheels
+    #                    if ((package_version == f.split('-')[1])
+    #                        and (package_name == f.split('-')[0].lower(
+    #                 ).replace('_', '-')))]
+    #     try:
+    #         wheel_file = wheel_files[0]
+    #     except IndexError:
+    #         print(f'Could not find wheel for:  '
+    #               f'{package_name}=={package_version}')
+    #         if package_name == 'lambda-packages':
+    #             return False
+    #         raise
+    #     if wheel_file in listdir(cached_wheels_dir):
+    #         return True
+    #
+    #     return False
 
-        # wheel_file = [f for f in wheels if ((package_version in f) and (
-        #         package_name.lower() in f))][0]
+    # def copy_lambda_wheel(self, package_name, package_version):
+    #     # package_path = op.join(project_path, package_name)
+    #     cached_wheels_dir = op.join(tempfile.gettempdir(), "cached_wheels")
+    #     temp_project_path = op.join(tempfile.gettempdir(),
+    #     "temp_project_path")
+    #
+    #     wheels = list(self.wheel_storage.list_tree())
+    #     wheel_files = [f for f in wheels
+    #                    if ((package_version == f.split('-')[1])
+    #                        and (package_name == f.split('-')[0].lower(
+    #                 ).replace('_', '-')))]
+    #     try:
+    #         wheel_file = wheel_files[0]
+    #     except IndexError:
+    #         print(f'Could not find wheel for:  '
+    #               f'{package_name}=={package_version}')
+    #         if package_name == 'lambda-packages':
+    #             return False
+    #         raise
+    #
+    #     cached_wheel_path = op.join(cached_wheels_dir, wheel_file)
+    #
+    #     if op.exists(cached_wheel_path):
+    #         # rmtree(package_path, ignore_errors=True)
+    #         # copy(wheel_path, project_path)
+    #         with zipfile.ZipFile(cached_wheel_path) as zfile:
+    #             zfile.extractall(temp_project_path)
+    #         # tar = tarfile.open(wheel_path, mode="r:gz")
+    #         # for member in tar.getmembers():
+    #         #     tar.extract(member, path)
 
-        wheel_path = op.join(cached_wheels_dir, wheel_file)
-        # print('wheel path ', wheel_path)
-
-        # lambda_package = lambda_packages[wheel_name][runtime]
-
-        if op.exists(wheel_path):
-            # print('wheel path exists')
-            # Trash the local version to help with package space saving
-            # print('removing ', package_path)
-            rmtree(package_path, ignore_errors=True)
-            copy(wheel_path, project_path)
-            # tar = tarfile.open(wheel_path, mode="r:gz")
-            # for member in tar.getmembers():
-            #     tar.extract(member, path)
-
-    @staticmethod
-    def get_installed_packages(site_packages, site_packages_64):
-        """
-        Returns a dict of installed packages that Zappa cares about.
-        """
-        import pkg_resources
-
-        package_to_keep = []
-        if op.isdir(site_packages):
-            package_to_keep += listdir(site_packages)
-        if op.isdir(site_packages_64):
-            package_to_keep += listdir(site_packages_64)
-
-        package_to_keep = [x.lower() for x in package_to_keep]
-        # print("Packages to keep:")
-        # pprint(package_to_keep)
-
-        installed_packages = {
-            package.project_name.lower(): package.version
-            for package in pkg_resources.WorkingSet()
-            if package.project_name.lower() in package_to_keep
-               or package.location.lower()
-               in [site_packages.lower(), site_packages_64.lower()]
-        }
-
-        # print('Installed packages:')
-        # pprint(installed_packages)
-
-        return installed_packages
-
-    def have_correct_lambda_package_version(self, package_name,
-                                            package_version):
-        """
-        Checks if a given package version binary should be copied over from
-        lambda packages.
-        package_name should be lower-cased version of package name.
-        """
-
-        # runtime = 'python3.7'
-        # lambda_package_details = lambda_packages.get(package_name, {}).get(
-        #     runtime)
-
-        # print(package_name, package_version)
-
-        cached_wheels_dir = op.join(tempfile.gettempdir(), "cached_wheels")
-        with suppress(FileExistsError):
-            makedirs(cached_wheels_dir)
-        # print(cached_wheels_dir)
-        # print(listdir(cached_wheels_dir))
-
-        # wheel_file = "{0!s}-{1!s}-{2!s}".format(
-        #     package_name, package_version, manylinux_wheel_file_suffix
-        # )
-
-        wheels = list(self.wheel_storage.list_tree())
-        # pprint(wheels)
-        # print(package_name.lower(), package_version)
-        wheel_files = [f for f in wheels
-                       if ((package_version == f.split('-')[1])
-                           and (package_name == f.split('-')[0].lower(
-                    ).replace('_', '-')))]
-        try:
-            wheel_file = wheel_files[0]
-        except IndexError:
-            print(f'Could not find wheel for:  '
-                  f'{package_name}=={package_version}')
-            if package_name == 'lambda-packages':
-                return False
-            raise
-        if wheel_file in listdir(cached_wheels_dir):
-            return True
-
-        return False
-
-    @staticmethod
-    def download_url_with_progress(url, stream, disable_progress):
-        """
-        Downloads a given url in chunks and writes to the provided stream
-        (can be any io stream).
-        Displays the progress bar for the download.
-        """
-        resp = requests.get(url, timeout=2, stream=True)
-        resp.raw.decode_content = True
-
-        progress = tqdm(
-            unit="B",
-            unit_scale=True,
-            total=int(resp.headers.get("Content-Length", 0)),
-            disable=disable_progress,
-        )
-        for chunk in resp.iter_content(chunk_size=1024):
-            if chunk:
-                progress.update(len(chunk))
-                stream.write(chunk)
-
-        progress.close()
-
-    def get_cached_manylinux_wheel(
+    def get_manylinux_wheel(
             self, package_name, package_version,
             disable_progress,
     ):
@@ -340,7 +307,13 @@ class Archive:
         Gets the locally stored version of a manylinux wheel.
         If one does not exist, the function downloads it.
         """
+
         cached_wheels_dir = op.join(tempfile.gettempdir(), "cached_wheels")
+        # temp_project_path = op.join(tempfile.gettempdir(),
+        # "temp_project_path")
+        with suppress(FileExistsError):
+            makedirs(cached_wheels_dir)
+
         if not op.isdir(cached_wheels_dir):
             makedirs(cached_wheels_dir)
 
@@ -354,25 +327,27 @@ class Archive:
         except IndexError:
             print(f'Could not find wheel for:  '
                   f'{package_name}=={package_version}')
-            if package_name == 'lambda-packages':
+            if package_name in ['lambda-packages']:
                 return False
             raise
 
-        wheel_path = op.join(cached_wheels_dir, wheel_file)
+        cached_wheel_path = op.join(cached_wheels_dir, wheel_file)
 
-        if not op.exists(wheel_path):
+        if not op.exists(cached_wheel_path):
             # pprint(list(self.wheel_storage.list_tree()))
             if wheel_file in list(self.wheel_storage.list_tree()):
                 print(
                     " - {}=={}: Downloading ".format(package_name,
                                                      package_version))
-                self.wheel_storage.get_file(wheel_file, wheel_path,
+                self.wheel_storage.get_file(wheel_file, cached_wheel_path,
                                             disable_progress=True)
+                # with zipfile.ZipFile(cached_wheel_path) as zfile:
+                #     zfile.extractall(temp_project_path)
         else:
             print("- {}=={}: Using locally cached manylinux wheel ".format(
                 package_name, package_version))
         print(f'\t==>\t{wheel_file}')
-        return wheel_path
+        return cached_wheel_path
 
     def create_lambda_zip(
             self,
@@ -502,7 +477,8 @@ class Archive:
         # if minify:
         #     excludes = ZIP_EXCLUDES + exclude
         #     copytree(
-        #         site_packages,
+        #         # site_packages,
+        #         op.join(site_packages, 'werkzeug'),
         #         temp_package_path,
         #         excludes=excludes,
         #         metadata=False,
@@ -512,6 +488,7 @@ class Archive:
         # else:
         #     copytree(site_packages, temp_package_path, metadata=False,
         #              symlinks=False)
+
         # # # We may have 64-bin specific packages too.
         site_packages_64 = op.join(
             venv, "lib64", get_venv_from_python_version(), "site-packages"
@@ -539,9 +516,10 @@ class Archive:
 
         # raise
         if egg_links:
+            excludes = ZIP_EXCLUDES + exclude + [split_venv[-1]]
             print("Egg links:")
             pprint(egg_links)
-            self.copy_editable_packages(egg_links, temp_package_path)
+            self.copy_editable_packages(egg_links, temp_package_path, excludes)
 
         copy_tree(temp_package_path, temp_project_path, update=True)
 
@@ -556,45 +534,42 @@ class Archive:
             # pprint(installed_packages)
 
             try:
-                for (
-                        installed_package_name,
-                        installed_package_version,
-                ) in sorted(installed_packages.items()):
-                    if self.have_correct_lambda_package_version(
-                            installed_package_name, installed_package_version
-                    ):
-                        # print(
-                        #     f"Have correct version -  {
-                        #     installed_package_name}")
-                        print(
-                            f" - {installed_package_name}=="
-                            f"{installed_package_version}: Using locally "
-                            f"cached "
-                            f"manylinux wheel ")
-
-                        self.copy_lambda_wheel(
-                            installed_package_name,
-                            installed_package_version,
-                            temp_project_path
-                        )
-                    else:
-                        cached_wheel_path = self.get_cached_manylinux_wheel(
-                            installed_package_name,
-                            installed_package_version,
-                            disable_progress,
-                        )
-                        if cached_wheel_path:
-                            # Otherwise try to use manylinux packages from
-                            # PyPi..
-                            # Related:
-                            # https://github.com/Miserlou/Zappa/issues/398
-                            rmtree(
-                                op.join(temp_project_path,
-                                        installed_package_name),
-                                ignore_errors=True,
-                            )
-                            # with zipfile.ZipFile(cached_wheel_path) as zfile:
-                            #     zfile.extractall(temp_project_path)
+                for package_name, package_version in sorted(
+                        installed_packages.items()):
+                    if package_name in ['pip',
+                                        'setuptools',
+                                        'boto3',
+                                        'botocore',
+                                        's3transfer',
+                                        ]:
+                        continue
+                    # if self.have_correct_lambda_package_version(
+                    #         installed_package_name, installed_package_version
+                    # ):
+                    #     print(
+                    #         f" - {installed_package_name}=="
+                    #         f"{installed_package_version}: Using locally "
+                    #         f"cached manylinux wheel ")
+                    #
+                    #     self.copy_lambda_wheel(
+                    #         installed_package_name,
+                    #         installed_package_version,
+                    #         temp_project_path
+                    #     )
+                    # else:
+                    cached_wheel_path = self.get_manylinux_wheel(
+                        package_name,
+                        package_version,
+                        disable_progress,
+                    )
+                    if cached_wheel_path:
+                        # rmtree(
+                        #     op.join(temp_project_path,
+                        #             package_name),
+                        #     ignore_errors=True,
+                        # )
+                        with zipfile.ZipFile(cached_wheel_path) as zfile:
+                            zfile.extractall(temp_project_path)
             except Exception as err:
                 print(f'Error:  {err}')
                 print('Cleaning up...')

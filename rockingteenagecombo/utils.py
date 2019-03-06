@@ -5,6 +5,7 @@ import io
 import re
 import shutil
 import sys
+from contextlib import suppress
 from fnmatch import fnmatch
 from json import dumps
 from logging import getLogger
@@ -61,7 +62,8 @@ def copytree(src, dst, excludes=None, symlinks=True, metadata=True):
     for file in ignore:
         file = file.replace(src, dst)
         # print('remove ', file)
-        remove(file)
+        with suppress(FileNotFoundError):
+            remove(file)
 
 
 

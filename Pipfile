@@ -20,7 +20,7 @@ toml = "*"
 tqdm = "*"
 troposphere = "*"
 wsgi-request-logger = "*"
-pyyaml = ">=3.13"
+pyyaml = "*"
 werkzeug = "*"
 pipreqs = "*"
 

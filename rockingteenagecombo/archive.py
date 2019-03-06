@@ -344,7 +344,7 @@ class Archive:
                 # with zipfile.ZipFile(cached_wheel_path) as zfile:
                 #     zfile.extractall(temp_project_path)
         else:
-            print("- {}=={}: Using locally cached manylinux wheel ".format(
+            print("- {}=={}: Using locally cached lambda wheel ".format(
                 package_name, package_version))
         print(f'\t==>\t{wheel_file}')
         return cached_wheel_path
@@ -538,9 +538,10 @@ class Archive:
                         installed_packages.items()):
                     if package_name in ['pip',
                                         'setuptools',
-                                        'boto3',
-                                        'botocore',
-                                        's3transfer',
+                                        # 'boto3',
+                                        # 'botocore',
+                                        # 's3transfer',
+                                        'wheel',
                                         ]:
                         continue
                     # if self.have_correct_lambda_package_version(

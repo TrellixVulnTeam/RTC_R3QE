@@ -20,9 +20,7 @@ for p in [pprint, ppformat]:
 
 @dataclass
 class Zappa(Events, DynamoDB, SNS, Route53, Archive):
-
-    def __post_init__(self):
-        self.cloudwatch = resource('cloudwatch')
+    cloudwatch = resource('cloudwatch')
 
     def shell(self):
         """

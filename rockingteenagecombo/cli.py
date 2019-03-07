@@ -707,7 +707,6 @@ class ZappaCLI(object):
             description=self.apigateway_description,
             # policy=self.apigateway_policy,
         )
-
         if not output:
             template_file = (
                     self.lambda_name + "-template-" + str(

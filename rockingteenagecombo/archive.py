@@ -538,9 +538,9 @@ class Archive:
                         installed_packages.items()):
                     if package_name in ['pip',
                                         'setuptools',
-                                        # 'boto3',
-                                        # 'botocore',
-                                        # 's3transfer',
+                                        'boto3',
+                                        'botocore',
+                                        's3transfer',
                                         'wheel',
                                         ]:
                         continue

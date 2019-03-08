@@ -22,28 +22,28 @@ for p in [pprint, ppformat]:
 
 @dataclass
 class Lambda(ApiGateway):
-    lambda_storage = S3('splashstand-deploy')
+    lambda_storage = S3("splashstand-deploy")
     lambda_ = client("lambda")
     cognito = client("cognito-idp")
     sts = client("sts")
 
     def create_lambda_function(
-            self,
-            bucket=None,
-            function_name=None,
-            handler=None,
-            s3_key=None,
-            description="Zappa Deployment",
-            timeout=30,
-            memory_size=512,
-            publish=True,
-            vpc_config=None,
-            dead_letter_config=None,
-            runtime="python3.7",
-            aws_environment_variables=None,
-            aws_kms_key_arn=None,
-            xray_tracing=False,
-            local_zip=None,
+        self,
+        bucket=None,
+        function_name=None,
+        handler=None,
+        s3_key=None,
+        description="Zappa Deployment",
+        timeout=30,
+        memory_size=512,
+        publish=True,
+        vpc_config=None,
+        dead_letter_config=None,
+        runtime="python3.7",
+        aws_environment_variables=None,
+        aws_kms_key_arn=None,
+        xray_tracing=False,
+        local_zip=None,
     ):
         """
         Given a bucket and key (or a local path) of a valid Lambda-zip,
@@ -73,8 +73,7 @@ class Lambda(ApiGateway):
             DeadLetterConfig=dead_letter_config,
             Environment={"Variables": aws_environment_variables},
             KMSKeyArn=aws_kms_key_arn,
-            TracingConfig={
-                "Mode": "Active" if self.xray_tracing else "PassThrough"},
+            TracingConfig={"Mode": "Active" if self.xray_tracing else "PassThrough"},
         )
         if local_zip:
             kwargs["Code"] = {"ZipFile": local_zip}
@@ -86,19 +85,18 @@ class Lambda(ApiGateway):
         resource_arn = response["FunctionArn"]
 
         if self.tags:
-            self.lambda_.tag_resource(Resource=resource_arn,
-                                      Tags=self.tags)
+            self.lambda_.tag_resource(Resource=resource_arn, Tags=self.tags)
 
         return resource_arn
 
     def update_lambda_function(
-            self,
-            bucket,
-            function_name,
-            s3_key=None,
-            publish=True,
-            local_zip=None,
-            num_revisions=None,
+        self,
+        bucket,
+        function_name,
+        s3_key=None,
+        publish=True,
+        local_zip=None,
+        num_revisions=None,
     ):
         """
         Given a bucket and key (or a local path) of a valid Lambda-zip,
@@ -142,18 +140,18 @@ class Lambda(ApiGateway):
         return response["FunctionArn"]
 
     def update_lambda_configuration(
-            self,
-            lambda_arn,
-            function_name,
-            handler,
-            description="Zappa Deployment",
-            timeout=30,
-            memory_size=512,
-            publish=True,
-            vpc_config=None,
-            runtime="python2.7",
-            aws_environment_variables=None,
-            aws_kms_key_arn=None,
+        self,
+        lambda_arn,
+        function_name,
+        handler,
+        description="Zappa Deployment",
+        timeout=30,
+        memory_size=512,
+        publish=True,
+        vpc_config=None,
+        runtime="python2.7",
+        aws_environment_variables=None,
+        aws_kms_key_arn=None,
     ):
         """
         Given an existing function ARN, update the configuration variables.
@@ -177,8 +175,7 @@ class Lambda(ApiGateway):
             FunctionName=function_name
         )
         if "Environment" in lambda_aws_config:
-            lambda_aws_environment_variables = lambda_aws_config[
-                "Environment"].get(
+            lambda_aws_environment_variables = lambda_aws_config["Environment"].get(
                 "Variables", {}
             )
             # Append keys that are remote but not in settings file
@@ -197,26 +194,24 @@ class Lambda(ApiGateway):
             VpcConfig=vpc_config,
             Environment={"Variables": aws_environment_variables},
             KMSKeyArn=aws_kms_key_arn,
-            TracingConfig={
-                "Mode": "Active" if self.xray_tracing else "PassThrough"},
+            TracingConfig={"Mode": "Active" if self.xray_tracing else "PassThrough"},
         )
 
         resource_arn = response["FunctionArn"]
 
         if self.tags:
-            self.lambda_.tag_resource(Resource=resource_arn,
-                                      Tags=self.tags)
+            self.lambda_.tag_resource(Resource=resource_arn, Tags=self.tags)
 
         return resource_arn
 
     def invoke_lambda_function(
-            self,
-            function_name,
-            payload,
-            invocation_type="Event",
-            log_type="Tail",
-            client_context=None,
-            qualifier=None,
+        self,
+        function_name,
+        payload,
+        invocation_type="Event",
+        log_type="Tail",
+        client_context=None,
+        qualifier=None,
     ):
         """
         Directly invoke a named Lambda function with a payload.
@@ -230,21 +225,18 @@ class Lambda(ApiGateway):
         )
 
     def rollback_lambda_function_version(
-            self, function_name, versions_back=1, publish=True
+        self, function_name, versions_back=1, publish=True
     ):
         """
         Rollback the lambda function code 'versions_back' number of revisions.
     
         Returns the Function ARN.
         """
-        response = self.lambda_.list_versions_by_function(
-            FunctionName=function_name
-        )
+        response = self.lambda_.list_versions_by_function(FunctionName=function_name)
 
         # Take into account $LATEST
         if len(response["Versions"]) < versions_back + 1:
-            print("We do not have {} revisions. Aborting".format(
-                str(versions_back)))
+            print("We do not have {} revisions. Aborting".format(str(versions_back)))
             return False
 
         revisions = [
@@ -270,8 +262,7 @@ class Lambda(ApiGateway):
             return False
 
         response = self.lambda_.update_function_code(
-            FunctionName=function_name, ZipFile=response.content,
-            Publish=publish
+            FunctionName=function_name, ZipFile=response.content, Publish=publish
         )  # pragma: no cover
 
         return response["FunctionArn"]
@@ -311,12 +302,12 @@ class Lambda(ApiGateway):
         return self.lambda_.delete_function(FunctionName=function_name)
 
     def update_stage_config(
-            self,
-            project_name,
-            stage_name,
-            cloudwatch_log_level,
-            cloudwatch_data_trace,
-            cloudwatch_metrics_enabled,
+        self,
+        project_name,
+        stage_name,
+        cloudwatch_log_level,
+        cloudwatch_data_trace,
+        cloudwatch_metrics_enabled,
     ):
         """
         Update CloudWatch metrics configuration.
@@ -330,10 +321,8 @@ class Lambda(ApiGateway):
                 stageName=stage_name,
                 patchOperations=[
                     self.get_patch_op("logging/loglevel", cloudwatch_log_level),
-                    self.get_patch_op("logging/dataTrace",
-                                      cloudwatch_data_trace),
-                    self.get_patch_op("metrics/enabled",
-                                      cloudwatch_metrics_enabled),
+                    self.get_patch_op("logging/dataTrace", cloudwatch_data_trace),
+                    self.get_patch_op("metrics/enabled", cloudwatch_metrics_enabled),
                 ],
             )
 
@@ -345,50 +334,43 @@ class Lambda(ApiGateway):
         -configure-event-source.html
         """
         logger.debug(
-            "Adding new permission to invoke Lambda function: {}".format(
-                lambda_name)
+            "Adding new permission to invoke Lambda function: {}".format(lambda_name)
         )
         permission_response = self.lambda_.add_permission(
             FunctionName=lambda_name,
-            StatementId="".join(
-                choice(ascii_uppercase + digits) for _ in
-                range(8)
-            ),
+            StatementId="".join(choice(ascii_uppercase + digits) for _ in range(8)),
             Action="lambda:InvokeFunction",
             Principal=principal,
             SourceArn=source_arn,
         )
-        if permission_response["ResponseMetadata"]["HTTPStatusCode"] != \
-                201:
+        if permission_response["ResponseMetadata"]["HTTPStatusCode"] != 201:
             print("Problem creating permission to invoke Lambda function")
             return None  # XXX: Raise?
 
         return permission_response
 
-    def update_cognito(self, lambda_name, user_pool, lambda_configs,
-                       lambda_arn):
+    def update_cognito(self, lambda_name, user_pool, lambda_configs, lambda_arn):
         LambdaConfig = {}
         for config in lambda_configs:
             LambdaConfig[config] = lambda_arn
-        description = self.cognito.describe_user_pool(
-            UserPoolId=user_pool)
+        description = self.cognito.describe_user_pool(UserPoolId=user_pool)
         description_kwargs = {}
         for key, value in description["UserPool"].items():
             if key in (
-                    "UserPoolId",
-                    "Policies",
-                    "AutoVerifiedAttributes",
-                    "SmsVerificationMessage",
-                    "EmailVerificationMessage",
-                    "EmailVerificationSubject",
-                    "VerificationMessageTemplate",
-                    "SmsAuthenticationMessage",
-                    "MfaConfiguration",
-                    "DeviceConfiguration",
-                    "EmailConfiguration",
-                    "SmsConfiguration",
-                    "UserPoolTags",
-                    "AdminCreateUserConfig",
+                "UserPoolId",
+                "Policies",
+                "AutoVerifiedAttributes",
+                "SmsVerificationMessage",
+                "EmailVerificationMessage",
+                "EmailVerificationSubject",
+                "VerificationMessageTemplate",
+                "SmsAuthenticationMessage",
+                "MfaConfiguration",
+                "DeviceConfiguration",
+                "EmailConfiguration",
+                "SmsConfiguration",
+                "UserPoolTags",
+                "AdminCreateUserConfig",
             ):
                 description_kwargs[key] = value
             elif key is "LambdaConfig":
@@ -418,15 +400,13 @@ class Lambda(ApiGateway):
         if result["ResponseMetadata"]["HTTPStatusCode"] != 201:
             print("Cognito:  Failed to update lambda permission", result)
 
-
-
     def update_stack(
-            self,
-            name,
-            working_bucket,
-            wait=False,
-            update_only=False,
-            disable_progress=False,
+        self,
+        name,
+        working_bucket,
+        wait=False,
+        update_only=False,
+        disable_progress=False,
     ):
         """
         Update or create the CF stack managed by Zappa.
@@ -436,21 +416,22 @@ class Lambda(ApiGateway):
         with open(template, "wb") as out:
             out.write(
                 bytes(
-                    self.cloudformation_template.to_json(indent=None,
-                                                         separators=(",", ":")),
+                    self.cloudformation_template.to_json(
+                        indent=None, separators=(",", ":")
+                    ),
                     "utf-8",
                 )
             )
 
-        self.lambda_storage.save(template, working_bucket,
-                                 disable_progress=disable_progress)
+        self.lambda_storage.save(
+            template, working_bucket, disable_progress=disable_progress
+        )
         # if self.boto_session.region_name == "us-gov-west-1":
         #     url = "https://s3-us-gov-west-1.amazonaws.com/{0}/{1}".format(
         #         working_bucket, template
         #     )
         # else:
-        url = "https://s3.amazonaws.com/{0}/{1}".format(working_bucket,
-                                                        template)
+        url = "https://s3.amazonaws.com/{0}/{1}".format(working_bucket, template)
 
         tags = [
             {"Key": key, "Value": self.tags[key]}
@@ -471,13 +452,11 @@ class Lambda(ApiGateway):
 
         if not update:
             self.cloudformation.create_stack(
-                StackName=name, Capabilities=capabilities, TemplateURL=url,
-                Tags=tags
+                StackName=name, Capabilities=capabilities, TemplateURL=url, Tags=tags
             )
             print(
                 "Waiting for stack {0} to create (this can take a "
-                "bit)..".format(
-                    name)
+                "bit)..".format(name)
             )
         else:
             try:
@@ -489,8 +468,7 @@ class Lambda(ApiGateway):
                 )
                 print("Waiting for stack {0} to update..".format(name))
             except ClientError as e:
-                if e.response["Error"][
-                    "Message"] == "No updates are to be performed.":
+                if e.response["Error"]["Message"] == "No updates are to be performed.":
                     wait = False
                 else:
                     raise
@@ -499,8 +477,7 @@ class Lambda(ApiGateway):
             total_resources = len(self.cloudformation_template.resources)
             current_resources = 0
             sr = self.cloudformation.get_paginator("list_stack_resources")
-            progress = tqdm(total=total_resources, unit="res",
-                            disable=disable_progress)
+            progress = tqdm(total=total_resources, unit="res", disable=disable_progress)
             while True:
                 sleep(3)
                 result = self.cloudformation.describe_stacks(StackName=name)

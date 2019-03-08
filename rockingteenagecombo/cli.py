@@ -1776,7 +1776,9 @@ class ZappaCLI(object):
                 + "'."
             )
             env = (
-                input("What do you want to call this environment (default " "'dev'): ")
+                input(
+                    "What do you want to call this environment (default " "'dev" "'): "
+                )
                 or "dev"
             )
             try:

@@ -443,9 +443,8 @@ class LambdaHandler(object):
                 logger.debug(result)
             else:
                 logger.error(
-                    "Cannot find a function to handle cognito trigger {"
-                    "}".format(
-                        triggerSource))
+                    "Cannot find a function to handle cognito trigger "
+                    "{}".format(triggerSource))
             return result
 
         # Normal web app flow
@@ -544,11 +543,11 @@ class LambdaHandler(object):
                 'You can investigate this with the `zappa tail` command.')
 
             # If we didn't even build an app_module, just raise.
-            if not settings.DJANGO_SETTINGS:
-                try:
-                    self.app_module
-                except NameError as ne:
-                    message = 'Failed to import module: {}'.format(ne.message)
+            # if not settings.DJANGO_SETTINGS:
+            try:
+                self.app_module
+            except NameError as ne:
+                message = 'Failed to import module: {}'.format(ne.message)
 
             # Call exception handler for unhandled exceptions
             exception_handler = self.settings.EXCEPTION_HANDLER

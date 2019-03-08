@@ -27,7 +27,7 @@ from .utils import (conflicts_with_a_neighbouring_module,
 # We never need to include these.
 # Related: https://github.com/Miserlou/Zappa/pull/56
 # Related: https://github.com/Miserlou/Zappa/pull/581
-ZIP_EXCLUDES = [
+zip_excludes = [
     "*.DS_Store",
     "*.Python",
     "*.git",
@@ -46,6 +46,15 @@ ZIP_EXCLUDES = [
     "*/setuputils/*",
     "*/__pycache__/*",
 ]
+
+package_excludes = ['pip',
+                    'setuptools',
+                    'boto3',
+                    'botocore',
+                    's3transfer',
+                    'wheel',
+                    'docutils',
+                    ]
 
 
 # runtime = 'python3.7'
@@ -230,7 +239,7 @@ class Archive:
                     copytree(
                         op.join(egg_path, pkg),
                         op.join(temp_package_path, pkg),
-                        excludes=ZIP_EXCLUDES + exclude,
+                        excludes=zip_excludes + exclude,
                         metadata=False,
                         symlinks=False,
                     )
@@ -421,7 +430,7 @@ class Archive:
         if not slim_handler:
             if minify:
                 # Related: https://github.com/Miserlou/Zappa/issues/744
-                excludes = ZIP_EXCLUDES + exclude + [split_venv[-1]]
+                excludes = zip_excludes + exclude + [split_venv[-1]]
                 # print(excludes)
                 copytree(
                     cwd,
@@ -475,7 +484,7 @@ class Archive:
         egg_links.extend(glob(op.join(site_packages, "*.egg-link")))
 
         # if minify:
-        #     excludes = ZIP_EXCLUDES + exclude
+        #     excludes = zip_excludes + exclude
         #     copytree(
         #         # site_packages,
         #         op.join(site_packages, 'werkzeug'),
@@ -497,7 +506,7 @@ class Archive:
         #     egg_links.extend(
         #         glob(op.join(site_packages_64, "*.egg-link")))
         #     if minify:
-        #         excludes = ZIP_EXCLUDES + exclude
+        #         excludes = zip_excludes + exclude
         #         # dir_excludes = self.get_from_dirs(cwd, excludes)
         #         # file_excludes = self.get_from_dir(cwd, excludes)
         #         copytree(
@@ -516,7 +525,7 @@ class Archive:
 
         # raise
         if egg_links:
-            excludes = ZIP_EXCLUDES + exclude + [split_venv[-1]]
+            excludes = zip_excludes + exclude + [split_venv[-1]]
             print("Egg links:")
             pprint(egg_links)
             self.copy_editable_packages(egg_links, temp_package_path, excludes)
@@ -536,13 +545,7 @@ class Archive:
             try:
                 for package_name, package_version in sorted(
                         installed_packages.items()):
-                    if package_name in ['pip',
-                                        'setuptools',
-                                        'boto3',
-                                        'botocore',
-                                        's3transfer',
-                                        'wheel',
-                                        ]:
+                    if package_name in package_excludes:
                         continue
                     # if self.have_correct_lambda_package_version(
                     #         installed_package_name, installed_package_version

@@ -18,6 +18,7 @@ class S3:
     def __post_init__(self):
         self.s3 = resource("s3")
         self.bucket = self.s3.Bucket(self.bucket_name)
+        self.s3.create_bucket(Bucket=self.bucket_name)
 
     def is_dir(self, relative_path):
         return relative_path.endswith("/")
@@ -66,8 +67,9 @@ class S3:
                 raise
         return resp["Body"].read()
 
-    def get_file(self, source_path, dest_path, bucket_name=None,
-                 disable_progress=False):
+    def get_file(
+        self, source_path, dest_path, bucket_name=None, disable_progress=False
+    ):
         if not bucket_name:
             bucket_name = self.bucket_name
         try:
@@ -81,14 +83,14 @@ class S3:
                 disable=disable_progress,
             )
             try:
-                self.s3.bucket.download_file(source_path, dest_path,
-                                             Callback=progress.update)
+                self.s3.bucket.download_file(
+                    source_path, dest_path, Callback=progress.update
+                )
             except ClientError as err:
                 if err.response["Error"]["Code"] == "404":
                     return False
             except Exception as err:  # pragma: no cover
-                self.s3.meta.client.download_file(bucket_name, source_path,
-                                                  dest_path)
+                self.s3.meta.client.download_file(bucket_name, source_path, dest_path)
         except (KeyboardInterrupt, SystemExit):  # pragma: no cover
             raise
         except Exception as err:  # pragma: no cover
@@ -96,8 +98,7 @@ class S3:
             # return False
         return True
 
-    def save(self, source_path, bucket_name=None,
-             disable_progress=False):
+    def save(self, source_path, bucket_name=None, disable_progress=False):
         if not bucket_name:
             bucket_name = self.bucket_name
 
@@ -108,8 +109,7 @@ class S3:
         dest_path = op.split(source_path)[1]
         try:
             source_size = stat(source_path).st_size
-            print("Uploading {0} ({1})..".format(dest_path,
-                                                 human_size(source_size)))
+            print("Uploading {0} ({1})..".format(dest_path, human_size(source_size)))
             progress = tqdm(
                 total=float(op.getsize(source_path)),
                 unit_scale=True,
@@ -120,16 +120,16 @@ class S3:
             obj = self.s3.Object(self.bucket_name, source_path)
             try:
                 self.bucket.upload_file(
-                    source_path, dest_path,
-                    Callback=progress.update
+                    source_path, dest_path, Callback=progress.update
                 )
                 obj.wait_until_exists(source_path)
             except ClientError as err:
                 if err.response["Error"]["Code"] == "404":
                     return False
             except Exception as err:  # pragma: no cover
-                self.s3.meta.upload_file(source_path, bucket_name,
-                                         dest_path)  # can use Callback
+                self.s3.meta.upload_file(
+                    source_path, bucket_name, dest_path
+                )  # can use Callback
                 obj.wait_until_exists(source_path)
             progress.close()
         except (KeyboardInterrupt, SystemExit):  # pragma: no cover
@@ -163,9 +163,6 @@ class S3:
         except ClientError as err:
             if err.response["Error"]["Code"] == "404":
                 return False
-        except (
-                ParamValidationError,
-                ClientError,
-        ):  # pragma: no cover
+        except (ParamValidationError, ClientError):  # pragma: no cover
             return False
         return True

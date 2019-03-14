@@ -29,6 +29,8 @@ from click import BaseCommand, Context
 from click.exceptions import ClickException
 from click.globals import push_context
 from dateutil import parser
+# from yaml import dump, load
+from yamlordereddictloader import Loader
 
 # from .archive import Archive
 from .config import API_GATEWAY_REGIONS
@@ -45,7 +47,7 @@ from .utils import (
     pprint,
     string_to_timestamp,
     validate_name,
-)
+    )
 
 for p in [pprint, ppformat]:
     pass
@@ -2568,7 +2570,7 @@ the SSL
         if ext == ".yml" or ext == ".yaml":
             with open(settings_file) as yaml_file:
                 try:
-                    self.zappa_settings = yaml.load(yaml_file)
+                    self.zappa_settings = yaml.load(yaml_file, Loader=Loader)
                 except ValueError:  # pragma: no cover
                     raise ValueError(
                         "Unable to load the Zappa settings YAML. It may be "

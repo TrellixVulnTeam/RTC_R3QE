@@ -23,6 +23,7 @@ wsgi-request-logger = "*"
 pyyaml = "*"
 werkzeug = "*"
 pipreqs = "*"
+yamlordereddictloader = "*"
 
 [requires]
 python_version = "3.7"

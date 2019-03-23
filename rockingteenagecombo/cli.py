@@ -29,6 +29,7 @@ from click import BaseCommand, Context
 from click.exceptions import ClickException
 from click.globals import push_context
 from dateutil import parser
+
 # from yaml import dump, load
 from yamlordereddictloader import Loader
 
@@ -47,7 +48,7 @@ from .utils import (
     pprint,
     string_to_timestamp,
     validate_name,
-    )
+)
 
 for p in [pprint, ppformat]:
     pass

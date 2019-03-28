@@ -24,6 +24,7 @@ pyyaml = "*"
 werkzeug = "*"
 pipreqs = "*"
 yamlordereddictloader = "*"
+docker = "*"
 
 [requires]
 python_version = "3.7"

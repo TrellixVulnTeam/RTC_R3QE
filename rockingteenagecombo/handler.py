@@ -492,11 +492,14 @@ class LambdaHandler(object):
                 environ["lambda.event"] = event
 
                 # Execute the application
+                print("go")
+                print(self.wsgi_app)
+                pprint(environ)
                 with Response.from_app(self.wsgi_app, environ) as response:
                     # This is the object we're going to return.
                     # Pack the WSGI response into our special dictionary.
                     zappa_returndict = dict()
-
+                    print(1)
                     if response.data:
                         if settings.BINARY_SUPPORT:
                             if (
@@ -511,7 +514,7 @@ class LambdaHandler(object):
                                 zappa_returndict["body"] = response.data
                         else:
                             zappa_returndict["body"] = response.get_data(as_text=True)
-
+                    print(2)
                     zappa_returndict["statusCode"] = response.status_code
                     zappa_returndict["headers"] = {}
                     for key, value in response.headers:
@@ -531,7 +534,7 @@ class LambdaHandler(object):
             # Print statements are visible in the logs either way
             print(err)
             exc_info = sys.exc_info()
-            pprint(exc_info)
+            print(traceback.format_exception(*exc_info))
             message = (
                 "An uncaught exception happened while servicing this request. "
                 "You can investigate this with the `zappa tail` command."

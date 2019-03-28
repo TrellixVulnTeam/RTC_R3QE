@@ -223,12 +223,13 @@ class LambdaHandler(object):
         exception_handler = handler.settings.EXCEPTION_HANDLER
         try:
             return handler.handler(event, context)
-        except Exception as ex:
+        except Exception as err:
+            print("lambda_handler\n", err)
             exception_processed = cls._process_exception(
                 exception_handler=exception_handler,
                 event=event,
                 context=context,
-                exception=ex,
+                exception=err,
             )
             if not exception_processed:
                 # Only re-raise exception if handler directed so. Allows
@@ -256,12 +257,12 @@ class LambdaHandler(object):
         """
         # getargspec does not support python 3 method with type hints
         # Related issue: https://github.com/Miserlou/Zappa/issues/1452
-        if hasattr(inspect, "getfullargspec"):  # Python 3
-            args, varargs, keywords, defaults, _, _, _ = inspect.getfullargspec(
-                app_function
-            )
-        else:  # Python 2
-            args, varargs, keywords, defaults = inspect.getargspec(app_function)
+        # if hasattr(inspect, "getfullargspec"):  # Python 3
+        args, varargs, keywords, defaults, _, _, _ = inspect.getfullargspec(
+            app_function
+        )
+        # else:  # Python 2
+        #     args, varargs, keywords, defaults = inspect.getargspec(app_function)
         num_args = len(args)
         if num_args == 0:
             result = app_function(event, context) if varargs else app_function()
@@ -272,8 +273,7 @@ class LambdaHandler(object):
         else:
             raise RuntimeError(
                 "Function signature is invalid. Expected a function that "
-                "accepts at most "
-                "2 arguments or varargs."
+                "accepts at most 2 arguments or varargs."
             )
         return result
 
@@ -492,14 +492,13 @@ class LambdaHandler(object):
                 environ["lambda.event"] = event
 
                 # Execute the application
-                print("go")
-                print(self.wsgi_app)
-                pprint(environ)
+                if settings.DEBUG:
+                    print(self.wsgi_app)
+                    pprint(environ)
                 with Response.from_app(self.wsgi_app, environ) as response:
                     # This is the object we're going to return.
                     # Pack the WSGI response into our special dictionary.
                     zappa_returndict = dict()
-                    print(1)
                     if response.data:
                         if settings.BINARY_SUPPORT:
                             if (
@@ -514,7 +513,6 @@ class LambdaHandler(object):
                                 zappa_returndict["body"] = response.data
                         else:
                             zappa_returndict["body"] = response.get_data(as_text=True)
-                    print(2)
                     zappa_returndict["statusCode"] = response.status_code
                     zappa_returndict["headers"] = {}
                     for key, value in response.headers:
@@ -562,7 +560,7 @@ class LambdaHandler(object):
             content["statusCode"] = 500
             body = {"message": message}
             if settings.DEBUG:  # only include traceback if debug is on.
-                print("DEBUG !!!!!!!!!!")
+                print("ZAPPA DEBUG !!!!!!!!!!")
                 body["traceback"] = traceback.format_exception(
                     *exc_info
                 )  # traceback as a list for readability.

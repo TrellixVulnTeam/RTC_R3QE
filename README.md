@@ -1,3 +1,5 @@
+Rocking Teenage Combo ("Zappa for pirates") deploys python 3.7 Flask applications to AWS Lambda serverless instances.
+
 <p align="center">
   <img src="http://i.imgur.com/oePnHJn.jpg" alt="Zappa Rocks!"/>
 </p>

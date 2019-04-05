@@ -10,8 +10,18 @@ from contextlib import suppress
 from dataclasses import dataclass
 from distutils.dir_util import copy_tree
 from glob import glob
-from os import (chmod, environ, getcwd, listdir, makedirs, path as op, remove,
-                rmdir, sep, walk)
+from os import (
+    chmod,
+    environ,
+    getcwd,
+    listdir,
+    makedirs,
+    path as op,
+    remove,
+    rmdir,
+    sep,
+    walk,
+)
 from shutil import copy, rmtree
 from uuid import uuid4
 
@@ -20,9 +30,13 @@ from setuptools import find_packages
 from tqdm import tqdm
 
 from .s3 import S3
-from .utils import (conflicts_with_a_neighbouring_module,
-                    contains_python_files_or_subdirs, copytree,
-                    get_venv_from_python_version, pprint)
+from .utils import (
+    conflicts_with_a_neighbouring_module,
+    contains_python_files_or_subdirs,
+    copytree,
+    get_venv_from_python_version,
+    pprint,
+)
 
 # We never need to include these.
 # Related: https://github.com/Miserlou/Zappa/pull/56
@@ -38,8 +52,8 @@ zip_excludes = [
     "*.hg",
     "*/.git/*",
     "*/.idea/*",
-    '*/docs/*',
-    '*/tests/*',
+    "*/docs/*",
+    "*/tests/*",
     "*/.git/*",
     "*/pip/*",
     "*/docutils/*",
@@ -47,23 +61,25 @@ zip_excludes = [
     "*/__pycache__/*",
 ]
 
-package_excludes = ['pip',
-                    'setuptools',
-                    'boto3',
-                    'botocore',
-                    's3transfer',
-                    'wheel',
-                    'docutils',
-                    ]
+package_excludes = [
+    "pip",
+    "setuptools",
+    "boto3",
+    "botocore",
+    "s3transfer",
+    "wheel",
+    "docutils",
+]
 
 
 # runtime = 'python3.7'
 
 # fn_version = "".join([d for d in runtime if d in digits])
 
+
 @dataclass
 class Archive:
-    wheel_storage = S3('lambda-wheels-3-7')
+    wheel_storage = S3("lambda-wheels-3-7")
 
     @staticmethod
     def download_url_with_progress(url, stream, disable_progress):
@@ -109,8 +125,8 @@ class Archive:
             package.project_name.lower(): package.version
             for package in pkg_resources.WorkingSet()
             if package.project_name.lower() in package_to_keep
-               or package.location.lower()
-               in [site_packages.lower(), site_packages_64.lower()]
+            or package.location.lower()
+            in [site_packages.lower(), site_packages_64.lower()]
         }
 
         # print('Installed packages:')
@@ -125,8 +141,7 @@ class Archive:
             venv = environ["VIRTUAL_ENV"]
         elif op.exists(".python-version"):  # pragma: no cover
             try:
-                subprocess.check_output(["pyenv", "help"],
-                                        stderr=subprocess.STDOUT)
+                subprocess.check_output(["pyenv", "help"], stderr=subprocess.STDOUT)
             except OSError:
                 print(
                     "This directory seems to have pyenv's local venv, "
@@ -134,8 +149,7 @@ class Archive:
                 )
             with open(".python-version", "r") as f:
                 env_name = f.readline().strip()
-            bin_path = subprocess.check_output(
-                ["pyenv", "which", "python"]).decode(
+            bin_path = subprocess.check_output(["pyenv", "which", "python"]).decode(
                 "utf-8"
             )
             venv = bin_path[: bin_path.rfind(env_name)] + env_name
@@ -154,8 +168,7 @@ class Archive:
                 deps = [(package.project_name, package.version)]
                 for req in package.requires():
                     deps += self.get_deps_list(
-                        pkg_name=req.project_name,
-                        installed_distros=installed_distros
+                        pkg_name=req.project_name, installed_distros=installed_distros
                     )
         return list(set(deps))  # de-dupe before returning
 
@@ -167,15 +180,11 @@ class Archive:
         ve_path = op.join(getcwd(), "handler_venv")
 
         if sys.platform == "win32":
-            current_site_packages_dir = op.join(
-                current_venv, "Lib", "site-packages"
-            )
-            venv_site_packages_dir = op.join(ve_path, "Lib",
-                                             "site-packages")
+            current_site_packages_dir = op.join(current_venv, "Lib", "site-packages")
+            venv_site_packages_dir = op.join(ve_path, "Lib", "site-packages")
         else:
             current_site_packages_dir = op.join(
-                current_venv, "lib", get_venv_from_python_version(),
-                "site-packages"
+                current_venv, "lib", get_venv_from_python_version(), "site-packages"
             )
             venv_site_packages_dir = op.join(
                 ve_path, "lib", get_venv_from_python_version(), "site-packages"
@@ -186,8 +195,7 @@ class Archive:
 
         # Copy zappa* to the new virtualenv
         zappa_things = [
-            z for z in listdir(current_site_packages_dir) if
-            z.lower()[:5] == "zappa"
+            z for z in listdir(current_site_packages_dir) if z.lower()[:5] == "zappa"
         ]
         for z in zappa_things:
             copytree(
@@ -199,17 +207,16 @@ class Archive:
         # Copying from current venv causes issues with things like
         # PyYAML that installs as yaml
         zappa_deps = self.get_deps_list("zappa")
-        pkg_list = ["{0!s}=={1!s}".format(dep, version) for dep, version in
-                    zappa_deps]
+        pkg_list = ["{0!s}=={1!s}".format(dep, version) for dep, version in zappa_deps]
         # Need to manually add setuptools
         pkg_list.append("setuptools")
         command = [
-                      "pip",
-                      "install",
-                      "--quiet",
-                      "--target",
-                      venv_site_packages_dir,
-                  ] + pkg_list
+            "pip",
+            "install",
+            "--quiet",
+            "--target",
+            venv_site_packages_dir,
+        ] + pkg_list
 
         # This is the recommended method for installing packages if you don't
         # to depend on `setuptools`
@@ -231,10 +238,10 @@ class Archive:
                 pkgs = set(
                     [
                         x.split(".")[0]
-                        for x in
-                        find_packages(egg_path, exclude=["test", "tests"])
+                        for x in find_packages(egg_path, exclude=["test", "tests"])
                     ]
                 )
+                pprint(pkgs)
                 for pkg in pkgs:
                     copytree(
                         op.join(egg_path, pkg),
@@ -247,8 +254,7 @@ class Archive:
         if temp_package_path:
             # now remove any egg-links as they will cause issues if they
             # still exist
-            for link in glob(
-                    op.join(temp_package_path, "*.egg-link")):
+            for link in glob(op.join(temp_package_path, "*.egg-link")):
                 remove(link)
 
     # def have_correct_lambda_package_version(self, package_name,
@@ -308,10 +314,7 @@ class Archive:
     #         # for member in tar.getmembers():
     #         #     tar.extract(member, path)
 
-    def get_manylinux_wheel(
-            self, package_name, package_version,
-            disable_progress,
-    ):
+    def get_manylinux_wheel(self, package_name, package_version, disable_progress):
         """
         Gets the locally stored version of a manylinux wheel.
         If one does not exist, the function downloads it.
@@ -327,16 +330,19 @@ class Archive:
             makedirs(cached_wheels_dir)
 
         wheels = list(self.wheel_storage.list_tree())
-        wheel_files = [f for f in wheels
-                       if ((package_version == f.split('-')[1])
-                           and (package_name == f.split('-')[0].lower(
-                    ).replace('_', '-')))]
+        wheel_files = [
+            f
+            for f in wheels
+            if (
+                (package_version == f.split("-")[1])
+                and (package_name == f.split("-")[0].lower().replace("_", "-"))
+            )
+        ]
         try:
             wheel_file = wheel_files[0]
         except IndexError:
-            print(f'Could not find wheel for:  '
-                  f'{package_name}=={package_version}')
-            if package_name in ['lambda-packages']:
+            print(f"Could not find wheel for:  " f"{package_name}=={package_version}")
+            if package_name in ["lambda-packages"]:
                 return False
             raise
 
@@ -345,33 +351,35 @@ class Archive:
         if not op.exists(cached_wheel_path):
             # pprint(list(self.wheel_storage.list_tree()))
             if wheel_file in list(self.wheel_storage.list_tree()):
-                print(
-                    " - {}=={}: Downloading ".format(package_name,
-                                                     package_version))
-                self.wheel_storage.get_file(wheel_file, cached_wheel_path,
-                                            disable_progress=True)
+                print(" - {}=={}: Downloading ".format(package_name, package_version))
+                self.wheel_storage.get_file(
+                    wheel_file, cached_wheel_path, disable_progress=True
+                )
                 # with zipfile.ZipFile(cached_wheel_path) as zfile:
                 #     zfile.extractall(temp_project_path)
         else:
-            print("- {}=={}: Using locally cached lambda wheel ".format(
-                package_name, package_version))
-        print(f'\t==>\t{wheel_file}')
+            print(
+                "- {}=={}: Using locally cached lambda wheel ".format(
+                    package_name, package_version
+                )
+            )
+        print(f"\t==>\t{wheel_file}")
         return cached_wheel_path
 
     def create_lambda_zip(
-            self,
-            prefix="lambda_package",
-            handler_file=None,
-            slim_handler=False,
-            minify=True,
-            exclude=None,
-            wheels_bucket=None,
-            use_precompiled_packages=True,
-            include=None,
-            venv=None,
-            output=None,
-            disable_progress=False,
-            archive_format="zip",
+        self,
+        prefix="lambda_package",
+        handler_file=None,
+        slim_handler=False,
+        minify=True,
+        exclude=None,
+        wheels_bucket=None,
+        use_precompiled_packages=True,
+        include=None,
+        venv=None,
+        output=None,
+        disable_progress=False,
+        archive_format="zip",
     ):
         if archive_format not in ["zip", "tarball"]:
             raise KeyError(
@@ -384,7 +392,7 @@ class Archive:
 
         build_time = str(int(time.time()))
         cwd = getcwd()
-        archive_fname = ''
+        archive_fname = ""
         if not output:
             if archive_format == "zip":
                 archive_fname = prefix + "-" + build_time + ".zip"
@@ -441,9 +449,7 @@ class Archive:
                     # ignore=ignore_patterns(*list(excludes)),
                 )
             else:
-                copytree(cwd, temp_project_path,
-                         metadata=False,
-                         symlinks=False)
+                copytree(cwd, temp_project_path, metadata=False, symlinks=False)
 
         # If a handler_file is supplied, copy that to the root of the package,
         # because that's where AWS Lambda looks for it. It can't be inside a
@@ -460,9 +466,7 @@ class Archive:
         package_info["build_user"] = getpass.getuser()
         # TODO: Add git head and info?
 
-        package_id_file = open(
-            op.join(temp_project_path, "package_info.json"), "w"
-        )
+        package_id_file = open(op.join(temp_project_path, "package_info.json"), "w")
         dumped = json.dumps(package_info, indent=4)
         try:
             package_id_file.write(dumped)
@@ -543,8 +547,7 @@ class Archive:
             # pprint(installed_packages)
 
             try:
-                for package_name, package_version in sorted(
-                        installed_packages.items()):
+                for package_name, package_version in sorted(installed_packages.items()):
                     if package_name in package_excludes:
                         continue
                     # if self.have_correct_lambda_package_version(
@@ -562,9 +565,7 @@ class Archive:
                     #     )
                     # else:
                     cached_wheel_path = self.get_manylinux_wheel(
-                        package_name,
-                        package_version,
-                        disable_progress,
+                        package_name, package_version, disable_progress
                     )
                     if cached_wheel_path:
                         # rmtree(
@@ -575,8 +576,8 @@ class Archive:
                         with zipfile.ZipFile(cached_wheel_path) as zfile:
                             zfile.extractall(temp_project_path)
             except Exception as err:
-                print(f'Error:  {err}')
-                print('Cleaning up...')
+                print(f"Error:  {err}")
+                print("Cleaning up...")
                 for p in [temp_project_path, temp_package_path]:
                     rmtree(p)
                 if op.isdir(venv) and slim_handler:
@@ -594,8 +595,7 @@ class Archive:
                     compression_method = zipfile.ZIP_DEFLATED
                 except ImportError:  # pragma: no cover
                     compression_method = zipfile.ZIP_STORED
-                archivef = zipfile.ZipFile(archive_path, "w",
-                                           compression_method)
+                archivef = zipfile.ZipFile(archive_path, "w", compression_method)
 
             elif archive_format == "tarball":
                 print("Packaging project as gzipped tarball.")
@@ -636,23 +636,21 @@ class Archive:
                         # Related: https://github.com/Miserlou/Zappa/pull/716
                         zipi = zipfile.ZipInfo(
                             op.join(
-                                root.replace(temp_project_path, "").lstrip(
-                                    sep),
-                                filename
+                                root.replace(temp_project_path, "").lstrip(sep),
+                                filename,
                             )
                         )
                         zipi.create_system = 3
                         zipi.external_attr = 0o755 << int(
-                            16)  # Is this P2/P3 functional?
+                            16
+                        )  # Is this P2/P3 functional?
                         with open(op.join(root, filename), "rb") as f:
-                            archivef.writestr(zipi, f.read(),
-                                              compression_method)
+                            archivef.writestr(zipi, f.read(), compression_method)
                     elif archive_format == "tarball":
                         tarinfo = tarfile.TarInfo(
                             op.join(
-                                root.replace(temp_project_path, "").lstrip(
-                                    sep),
-                                filename
+                                root.replace(temp_project_path, "").lstrip(sep),
+                                filename,
                             )
                         )
                         tarinfo.mode = 0o755
@@ -675,20 +673,16 @@ class Archive:
                     dirs[:] = [d for d in dirs if d != root]
                 else:
                     if (
-                            "__init__.py" not in files
-                            and not conflicts_with_a_neighbouring_module(root)
+                        "__init__.py" not in files
+                        and not conflicts_with_a_neighbouring_module(root)
                     ):
-                        tmp_init = op.join(temp_project_path,
-                                           "__init__.py")
+                        tmp_init = op.join(temp_project_path, "__init__.py")
                         open(tmp_init, "a").close()
                         chmod(tmp_init, 0o755)
 
                         arcname = op.join(
                             root.replace(temp_project_path, ""),
-                            op.join(
-                                root.replace(temp_project_path, ""),
-                                "__init__.py"
-                            ),
+                            op.join(root.replace(temp_project_path, ""), "__init__.py"),
                         )
                         if archive_format == "zip":
                             archivef.write(tmp_init, arcname)
@@ -696,10 +690,10 @@ class Archive:
                             archivef.add(tmp_init, arcname)
 
         except Exception as err:
-            print(f'Error:  {err}')
+            print(f"Error:  {err}")
         finally:
             archivef.close()
-            print('Cleaning up...')
+            print("Cleaning up...")
             # Trash the temp directory
             rmtree(temp_project_path)
             rmtree(temp_package_path)

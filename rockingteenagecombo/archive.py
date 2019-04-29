@@ -11,8 +11,17 @@ from dataclasses import dataclass
 from distutils.dir_util import copy_tree
 from glob import glob
 from os import (
-    chmod, environ, getcwd, listdir, makedirs, path as op, remove, rmdir, sep, system,
-    walk
+    chmod,
+    environ,
+    getcwd,
+    listdir,
+    makedirs,
+    path as op,
+    remove,
+    rmdir,
+    sep,
+    system,
+    walk,
     )
 from re import IGNORECASE, findall
 from shutil import copy, rmtree

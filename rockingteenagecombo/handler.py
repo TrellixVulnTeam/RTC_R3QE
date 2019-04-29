@@ -492,9 +492,9 @@ class LambdaHandler(object):
                 environ["lambda.event"] = event
 
                 # Execute the application
-                if settings.DEBUG:
-                    print(self.wsgi_app)
-                    pprint(environ)
+                # if settings.DEBUG:
+                #     print(self.wsgi_app)
+                #     pprint(environ)
                 with Response.from_app(self.wsgi_app, environ) as response:
                     # This is the object we're going to return.
                     # Pack the WSGI response into our special dictionary.

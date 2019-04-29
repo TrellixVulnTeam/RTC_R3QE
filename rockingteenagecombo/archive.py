@@ -11,21 +11,15 @@ from dataclasses import dataclass
 from distutils.dir_util import copy_tree
 from glob import glob
 from os import (
-    chmod,
-    environ,
-    getcwd,
-    listdir,
-    makedirs,
-    path as op,
-    remove,
-    rmdir,
-    sep,
-    walk,
-)
+    chmod, environ, getcwd, listdir, makedirs, path as op, remove, rmdir, sep, system,
+    walk
+    )
+from re import IGNORECASE, findall
 from shutil import copy, rmtree
 from uuid import uuid4
 
 import requests
+from inflection import underscore
 from setuptools import find_packages
 from tqdm import tqdm
 
@@ -36,7 +30,7 @@ from .utils import (
     copytree,
     get_venv_from_python_version,
     pprint,
-)
+    )
 
 # We never need to include these.
 # Related: https://github.com/Miserlou/Zappa/pull/56
@@ -241,7 +235,9 @@ class Archive:
                         for x in find_packages(egg_path, exclude=["test", "tests"])
                     ]
                 )
-                pprint(pkgs)
+                app_dir = getcwd().split("/")[-1]
+                if app_dir in pkgs:
+                    pkgs = [app_dir]
                 for pkg in pkgs:
                     copytree(
                         op.join(egg_path, pkg),
@@ -314,6 +310,18 @@ class Archive:
     #         # for member in tar.getmembers():
     #         #     tar.extract(member, path)
 
+    def get_wheel_files(self, package_name, package_version):
+        wheels = list(self.wheel_storage.list_tree())
+        wheel_files = [
+            f
+            for f in wheels
+            if (
+                (package_version == f.split("-")[1])
+                and (package_name == f.split("-")[0].lower().replace("_", "-"))
+            )
+        ]
+        return wheel_files
+
     def get_manylinux_wheel(self, package_name, package_version, disable_progress):
         """
         Gets the locally stored version of a manylinux wheel.
@@ -329,22 +337,24 @@ class Archive:
         if not op.isdir(cached_wheels_dir):
             makedirs(cached_wheels_dir)
 
-        wheels = list(self.wheel_storage.list_tree())
-        wheel_files = [
-            f
-            for f in wheels
-            if (
-                (package_version == f.split("-")[1])
-                and (package_name == f.split("-")[0].lower().replace("_", "-"))
-            )
-        ]
+        wheel_files = self.get_wheel_files(package_name, package_version)
         try:
             wheel_file = wheel_files[0]
         except IndexError:
             print(f"Could not find wheel for:  " f"{package_name}=={package_version}")
             if package_name in ["lambda-packages"]:
                 return False
-            raise
+            system(f"docker exec -t lambda_3_7 pip wheel {package_name} -w wheels")
+            pkg_dir = "/Users/les/Projects/lambda_wheels_3_7/wheels"
+            pkg_file = "-".join([underscore(package_name), package_version])
+            pkg_files = glob(op.join(pkg_dir, "**"))
+            pkg_files = [
+                f for f in pkg_files if findall(f".*{pkg_file}-.*", f, flags=IGNORECASE)
+            ]
+            print(f"Installing {pkg_file}...")
+            self.wheel_storage.save(pkg_files[0])
+            wheel_files = self.get_wheel_files(package_name, package_version)
+            wheel_file = wheel_files[0]
 
         cached_wheel_path = op.join(cached_wheels_dir, wheel_file)
 
@@ -409,7 +419,7 @@ class Archive:
 
         # Make sure that 'concurrent' is always forbidden.
         # https://github.com/Miserlou/Zappa/issues/827
-        if not "concurrent" in exclude:
+        if not "concurrent" in exclude:  # https://github.com/Miserlou/Zappa/issues/827
             exclude.append("concurrent")
 
         def splitpath(path):
@@ -538,7 +548,6 @@ class Archive:
 
         # Then the pre-compiled packages..
         if use_precompiled_packages:
-            print("Downloading and installing dependencies...")
             installed_packages = self.get_installed_packages(
                 site_packages, site_packages_64
             )
@@ -547,6 +556,16 @@ class Archive:
             # pprint(installed_packages)
 
             try:
+                print(f"Starting docker container...")
+                system(
+                    "docker run -t -d --rm --name lambda_3_7 -v "
+                    "~/Projects/lambda_wheels_3_7:/lambda -w "
+                    "/lambda/ lambci/lambda:build-python3.7 bash  >/dev/null 2>&1"
+                )
+
+                print("Checking pip version...")
+                system("docker exec -t lambda_3_7 pip install --upgrade pip")
+                print("Downloading and installing dependencies...")
                 for package_name, package_version in sorted(installed_packages.items()):
                     if package_name in package_excludes:
                         continue
@@ -575,7 +594,7 @@ class Archive:
                         # )
                         with zipfile.ZipFile(cached_wheel_path) as zfile:
                             zfile.extractall(temp_project_path)
-            except Exception as err:
+            except (Exception, KeyboardInterrupt) as err:
                 print(f"Error:  {err}")
                 print("Cleaning up...")
                 for p in [temp_project_path, temp_package_path]:
@@ -585,6 +604,14 @@ class Archive:
                     rmtree(venv)
                 raise err
                 # XXX - What should we do here?
+            finally:
+                print("Saving docker container...")
+                system(
+                    "docker commit lambda_3_7 lambci/lambda:build-python3.7 >/dev/null 2>&1"
+                )
+                print("Stopping docker container...")
+                system("docker stop lambda_3_7 >/dev/null 2>&1")
+                # system("docker rm lambda_3_7")
 
         # Then archive it all up..
         try:
@@ -603,7 +630,6 @@ class Archive:
 
             for root, dirs, files in walk(temp_project_path):
                 for filename in files:
-
                     # Skip .pyc files for Django migrations
                     # https://github.com/Miserlou/Zappa/issues/436
                     # https://github.com/Miserlou/Zappa/issues/464
@@ -617,7 +643,6 @@ class Archive:
                         abs_filname = op.join(root, filename)
                         abs_pyc_filename = abs_filname + "c"
                         if op.isfile(abs_pyc_filename):
-
                             # but only if the pyc is older than the py,
                             # otherwise we'll deploy outdated code!
                             py_time = stat(abs_filname).st_mtime

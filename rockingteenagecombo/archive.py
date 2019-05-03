@@ -22,7 +22,7 @@ from os import (
     sep,
     system,
     walk,
-)
+    )
 from re import IGNORECASE, findall
 from shutil import copy, rmtree
 from uuid import uuid4
@@ -39,7 +39,7 @@ from .utils import (
     copytree,
     get_venv_from_python_version,
     pprint,
-)
+    )
 
 # We never need to include these.
 # Related: https://github.com/Miserlou/Zappa/pull/56
@@ -353,7 +353,10 @@ class Archive:
             print(f"Could not find wheel for:  " f"{package_name}=={package_version}")
             if package_name in ["lambda-packages"]:
                 return False
-            system(f"docker exec -t lambda_3_7 pip wheel {package_name} -w wheels")
+            system(
+                f"docker exec -t lambda_3_7 pip wheel "
+                f"{package_name}=={package_version} -w wheels"
+            )
             pkg_dir = "/Users/les/Projects/lambda_wheels_3_7/wheels"
             pkg_file = "-".join([underscore(package_name), package_version])
             pkg_files = glob(op.join(pkg_dir, "**"))
@@ -361,7 +364,7 @@ class Archive:
                 f for f in pkg_files if findall(f".*{pkg_file}-.*", f, flags=IGNORECASE)
             ]
             print(f"Installing {pkg_file}...")
-            self.wheel_storage.save(pkg_files[0])
+            self.wheel_storage.save(pkg_files[0], disable_progress=False)
             wheel_files = self.get_wheel_files(package_name, package_version)
             wheel_file = wheel_files[0]
 

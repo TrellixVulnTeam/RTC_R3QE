@@ -28,5 +28,4 @@ container, and saved to an S3 bucket
 (supports Python 3.7+ only)
 - no Django support (currently)
 - no multi-session support (currently)
-- no policy support (currently)
 - more (this doc a work in progress)

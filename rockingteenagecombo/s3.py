@@ -108,8 +108,9 @@ class S3:
 
         dest_path = op.split(source_path)[1]
         try:
-            source_size = stat(source_path).st_size
-            print("Uploading {0} ({1})..".format(dest_path, human_size(source_size)))
+            # source_size = stat(source_path).st_size
+            source_size = op.getsize(source_path)
+            print("Uploading {0} ({1})...".format(dest_path, human_size(source_size)))
             progress = tqdm(
                 total=float(op.getsize(source_path)),
                 unit_scale=True,
@@ -127,6 +128,7 @@ class S3:
                 if err.response["Error"]["Code"] == "404":
                     return False
             except Exception as err:  # pragma: no cover
+                print(err)
                 self.s3.meta.upload_file(
                     source_path, bucket_name, dest_path
                 )  # can use Callback

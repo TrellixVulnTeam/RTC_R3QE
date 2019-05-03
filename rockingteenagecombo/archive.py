@@ -22,7 +22,7 @@ from os import (
     sep,
     system,
     walk,
-    )
+)
 from re import IGNORECASE, findall
 from shutil import copy, rmtree
 from uuid import uuid4
@@ -39,7 +39,7 @@ from .utils import (
     copytree,
     get_venv_from_python_version,
     pprint,
-    )
+)
 
 # We never need to include these.
 # Related: https://github.com/Miserlou/Zappa/pull/56

@@ -73,9 +73,8 @@ class S3:
         if not bucket_name:
             bucket_name = self.bucket_name
         try:
-            # source_size = stat(source_path).st_size
-            # print("Downloading {0} ({1})..".format(dest_path,
-            #                                        human_size(source_size)))
+            source_size = stat(source_path).st_size
+            print("Downloading {0} ({1})..".format(dest_path, human_size(source_size)))
             progress = tqdm(
                 # total=float(op.getsize(source_path)),
                 unit_scale=True,
@@ -108,8 +107,8 @@ class S3:
 
         dest_path = op.split(source_path)[1]
         try:
-            # source_size = stat(source_path).st_size
-            source_size = op.getsize(source_path)
+            source_size = stat(source_path).st_size
+            # source_size = op.getsize(source_path)
             print("Uploading {0} ({1})...".format(dest_path, human_size(source_size)))
             progress = tqdm(
                 total=float(op.getsize(source_path)),

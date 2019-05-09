@@ -224,7 +224,7 @@ class LambdaHandler(object):
         try:
             return handler.handler(event, context)
         except Exception as err:
-            print("lambda_handler\n", err)
+            # print("lambda_handler\n", err)
             exception_processed = cls._process_exception(
                 exception_handler=exception_handler,
                 event=event,

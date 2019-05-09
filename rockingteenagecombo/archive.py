@@ -20,6 +20,7 @@ from os import (
     remove,
     rmdir,
     sep,
+    stat,
     system,
     walk,
 )
@@ -364,7 +365,7 @@ class Archive:
                 f for f in pkg_files if findall(f".*{pkg_file}-.*", f, flags=IGNORECASE)
             ]
             print(f"Installing {pkg_file}...")
-            self.wheel_storage.save(pkg_files[0], disable_progress=False)
+            self.wheel_storage.save(pkg_files[0], disable_progress=True)
             wheel_files = self.get_wheel_files(package_name, package_version)
             wheel_file = wheel_files[0]
 
@@ -692,9 +693,9 @@ class Archive:
                         )
                         tarinfo.mode = 0o755
 
-                        stat = stat(op.join(root, filename))
-                        tarinfo.mtime = stat.st_mtime
-                        tarinfo.size = stat.st_size
+                        fstat = stat(op.join(root, filename))
+                        tarinfo.mtime = fstat.st_mtime
+                        tarinfo.size = fstat.st_size
                         with open(op.join(root, filename), "rb") as f:
                             archivef.addfile(tarinfo, f)
 
@@ -728,6 +729,7 @@ class Archive:
 
         except Exception as err:
             print(f"Error:  {err}")
+            # raise RuntimeWarning(err)
         finally:
             archivef.close()
             print("Cleaning up...")

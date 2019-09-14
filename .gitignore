@@ -87,3 +87,7 @@ zappa_settings.json
 *.sublime-workspace
 
 README.test.md
+.gitignore
+CrackerJack.egg-info/
+crackerjack/.mypy_cache/
+crackerjack/monkeytype.sqlite3

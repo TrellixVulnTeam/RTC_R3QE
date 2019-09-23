@@ -22,7 +22,7 @@ for p in [pprint, ppformat]:
 
 @dataclass
 class Lambda(ApiGateway):
-    lambda_storage = S3("splashstand-deploy")
+    lambda_storage = S3("zappa-deploy")
     lambda_ = client("lambda")
     cognito = client("cognito-idp")
     sts = client("sts")
